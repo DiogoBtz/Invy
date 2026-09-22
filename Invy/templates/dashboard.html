@@ -1,0 +1,224 @@
+﻿{# Dashboard: mostra indicadores, ultimos cadastros e manutencoes recentes. #}
+{% extends "base.html" %}
+{% from "macros/rh.html" import rh_request_queue with context %}
+
+{% block content %}
+
+<div class="topbar">
+    <div class="dashboard-title-wrap">
+        {% set dashboard_logo = brand.logo_path|default('', true) %}
+        <span class="dashboard-title-logo-shell" aria-hidden="true">
+            {% if dashboard_logo %}
+            <img
+                class="dashboard-title-logo"
+                src="{{ url_for('static', filename=dashboard_logo) }}"
+                alt=""
+            >
+            {% else %}
+            <span class="dashboard-title-logo-fallback">{{ (brand.name|default('Invy'))[:1]|upper }}</span>
+            {% endif %}
+        </span>
+        <div>
+            <h1>Dashboard</h1>
+            <div class="subtitle">Visão operacional do inventário da empresa</div>
+        </div>
+    </div>
+</div>
+
+{% if current_user.can_see_rh_requests and cadastros_rh_pendentes %}
+{{ rh_request_queue(
+    cadastros_rh_pendentes,
+    heading='Cadastros do RH aguardando TI',
+    note='Revise os novos colaboradores e abra a tela certa para vincular patrimonio, lote ou NF.',
+    cta_url=url_for('chamados_rh'),
+    cta_label='Abrir fila completa',
+    compact=True
+) }}
+{% endif %}
+
+{# Cartoes resumidos calculados em routes/dashboard.py. #}
+<div class="stats">
+    <a class="stat-box dashboard-stat-link accent-blue" href="{{ url_for('equipamentos', tipo='Notebook', status='Estoque', ordem='rfm') }}">
+        <span class="stat-kicker">Estoque</span>
+        <h3>{{ notebooks_estoque }}</h3>
+        <p>Notebook em estoque</p>
+        <span class="stat-action">Ver lista</span>
+    </a>
+    <a class="stat-box dashboard-stat-link accent-green" href="{{ url_for('equipamentos', tipo='Notebook', status='Em uso', ordem='usuario') }}">
+        <span class="stat-kicker">Operação</span>
+        <h3>{{ notebooks_em_uso }}</h3>
+        <p>Notebook em uso</p>
+        <span class="stat-action">Ver lista</span>
+    </a>
+    <a class="stat-box dashboard-stat-link accent-red" href="{{ url_for('equipamentos', tipo='Notebook', garantia='vencida', ordem='garantia') }}">
+        <span class="stat-kicker">Crítico</span>
+        <h3>{{ garantia_vencida }}</h3>
+        <p>Garantias vencidas</p>
+        <span class="stat-action">Abrir alerta</span>
+    </a>
+    <a class="stat-box dashboard-stat-link accent-amber" href="{{ url_for('equipamentos', tipo='Notebook', garantia='vencendo', ordem='garantia') }}">
+        <span class="stat-kicker">Atenção</span>
+        <h3>{{ garantia_30_dias }}</h3>
+        <p>Garantias a vencer</p>
+        <span class="stat-action">Abrir alerta</span>
+    </a>
+</div>
+
+<div class="panel quality-dashboard-panel dashboard-bi-panel">
+    <div class="quality-dashboard-head">
+        <div>
+            <span class="quality-kicker">Mini BI</span>
+            <div class="section-title">Leitura rapida da operacao</div>
+        </div>
+        <a class="btn btn-secondary" href="{{ url_for('relatorios') }}">Relatorio gerencial</a>
+    </div>
+    <div class="quality-bi-layout">
+        <div class="quality-total-card">
+            <span>Notebooks em uso</span>
+            <strong>{{ notebooks_em_uso }}</strong>
+            <small>{{ notebooks_estoque }} em estoque, {{ garantia_vencida }} com garantia vencida e {{ garantia_30_dias }} vencendo.</small>
+        </div>
+        <div class="quality-bar-chart">
+            {% for item in barras_dashboard %}
+            <a class="quality-bar-row severity-{{ item.severidade }}" href="{{ item.url }}">
+                <span>{{ item.titulo }}</span>
+                <div class="quality-bar-track"><i style="width: {{ item.percentual }}%"></i></div>
+                <strong>{{ item.total }}</strong>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<div class="dashboard-grid">
+    <div class="panel dashboard-panel">
+        <div class="section-title">Últimos equipamentos atualizados</div>
+
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Patrimonio</th>
+                        <th>Tipo</th>
+                        <th>Modelo / Equipamento</th>
+                        <th>Usuário Final</th>
+                        <th>Setor/Função</th>
+                        <th>Status</th>
+                        <th>Ação</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for eq in ultimos %}
+                    <tr>
+                        <td data-label="Patrimonio">
+                            <a class="equipment-link asset-code" href="{{ url_for('historico_service_tag', equipamento_id=eq.id) }}">{{ eq.patrimonio or '-' }}</a>
+                        </td>
+                        <td data-label="Tipo">{{ eq.tipo_equipamento }}</td>
+                        <td data-label="Modelo / Equipamento">{{ eq.nome_equipamento_rfm }}</td>
+                        <td data-label="Usuário Final">{{ eq.usuario_final or '-' }}</td>
+                        <td data-label="Setor/Função">{{ eq.setor_usuario or '-' }}</td>
+                        <td data-label="Status"><span class="status-pill" data-status="{{ eq.status_equipamento|lower }}">{{ eq.status_equipamento }}</span></td>
+                        <td data-label="Ação">
+                            <div class="action-row">
+                                {% if current_user.is_admin or current_user.can_edit %}
+                                <a class="btn btn-secondary" href="{{ url_for('editar_equipamento', equipamento_id=eq.id) }}">Editar</a>
+                                {% else %}
+                                <a class="btn btn-secondary" href="{{ url_for('historico_service_tag', equipamento_id=eq.id) }}">Detalhes</a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="7">Nenhum equipamento cadastrado.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <aside class="panel dashboard-panel">
+        <div class="section-title">Alertas</div>
+        <div class="insight-list">
+            <a class="insight-row alert-row alert-link is-critical" href="{{ url_for('equipamentos', tipo='Notebook', garantia='vencida', ordem='garantia') }}">
+                <span>
+                    <b>Garantia vencida</b>
+                    <small>Equipamentos para revisar</small>
+                </span>
+                <strong>{{ garantia_vencida }}</strong>
+            </a>
+            <a class="insight-row alert-row alert-link is-warning" href="{{ url_for('equipamentos', tipo='Notebook', garantia='vencendo', ordem='garantia') }}">
+                <span>
+                    <b>Vence em breve</b>
+                    <small>Planejar renovação ou troca</small>
+                </span>
+                <strong>{{ garantia_30_dias }}</strong>
+            </a>
+        </div>
+
+        <div class="section-title section-spacer">Top departamentos em uso</div>
+        <div class="insight-list">
+            {% set maior_departamento = departamentos_top[0][1] if departamentos_top else 0 %}
+            {% for departamento, qtd in departamentos_top %}
+            <a class="insight-row sector-row sector-link" href="{{ url_for('equipamentos', tipo='Notebook', status='Em uso', departamento=departamento, ordem='usuario') }}" style="--meter: {{ ((qtd / maior_departamento) * 100)|round(0) if maior_departamento else 0 }}%;">
+                <span>{{ departamento }}</span>
+                <strong>{{ qtd }}</strong>
+                <i aria-hidden="true"></i>
+            </a>
+            {% else %}
+            <div class="insight-row"><span>Nenhum notebook em uso com departamento</span><strong>0</strong></div>
+            {% endfor %}
+        </div>
+
+        <div class="section-title section-spacer">Top pagantes</div>
+        <div class="insight-list">
+            {% set maior_pagante = pagantes_top[0][1] if pagantes_top else 0 %}
+            {% for pagante, qtd in pagantes_top %}
+            <a class="insight-row sector-row sector-link" href="{{ url_for('equipamentos', tipo='Notebook', pagante=pagante, ordem='usuario') }}" style="--meter: {{ ((qtd / maior_pagante) * 100)|round(0) if maior_pagante else 0 }}%;">
+                <span>{{ pagante }}</span>
+                <strong>{{ qtd }}</strong>
+                <i aria-hidden="true"></i>
+            </a>
+            {% else %}
+            <div class="insight-row"><span>Nenhum pagante informado</span><strong>0</strong></div>
+            {% endfor %}
+        </div>
+</div>
+
+{% if manutencoes_recentes %}
+<div class="panel section-spacer">
+    <div class="section-title">Manutenções, formatações e suportes recentes</div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Patrimonio</th>
+                    <th>Equipamento</th>
+                    <th>Usuário</th>
+                    <th>Serviço</th>
+                    <th>Item/Software</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in manutencoes_recentes %}
+                {% set eq = item.equipment %}
+                <tr>
+                    <td data-label="Patrimonio">
+                        <a class="equipment-link asset-code" href="{{ url_for('historico_service_tag', equipamento_id=item.equipment_id) }}">{{ eq.patrimonio if eq else '-' }}</a>
+                    </td>
+                    <td data-label="Equipamento">{{ eq.nome_equipamento_rfm if eq else item.service_tag }}</td>
+                    <td data-label="Usuário">{{ item.usuario_final or (eq.usuario_final if eq else '') or '-' }}</td>
+                    <td data-label="Serviço">{{ item.servico_realizado or item.tipo_evento or '-' }}</td>
+                    <td data-label="Item/Software">{{ item.peca_trocada or '-' }}</td>
+                    {% set item_status = item.status_equipamento or (eq.status_equipamento if eq else '') or '-' %}
+                    <td data-label="Status"><span class="status-pill" data-status="{{ item_status|lower }}">{{ item_status }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

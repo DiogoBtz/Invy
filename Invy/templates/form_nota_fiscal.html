@@ -1,0 +1,101 @@
+﻿{# Cadastro e edicao de nota fiscal. #}
+{% extends "base.html" %}
+
+{% block content %}
+<div class="topbar">
+    <div>
+        <h1>{{ titulo }}</h1>
+        <div class="subtitle">Informe a NF, cole Service Tags e cadastre itens sem Service Tag</div>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary" href="{{ url_for('notas_fiscais') }}">Voltar</a>
+        {% if invoice %}
+        <a class="btn btn-outline" href="{{ url_for('detalhe_nota_fiscal', invoice_id=invoice.id) }}">Ver NF</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="panel form-panel equipment-form-panel">
+    <form class="equipment-form" method="post" enctype="multipart/form-data" data-invoice-form>
+        {{ csrf_input()|safe }}
+        <input type="hidden" id="pdf_lido_preview" name="pdf_lido_preview" value="" data-invoice-pdf-preview-flag>
+
+        <section class="form-block primary-block">
+            <div class="section-title">Dados da nota</div>
+            <div class="grid-3">
+                <div>
+                    <label for="numero">Numero NF<span class="required-marker" aria-hidden="true">*</span></label>
+                    <input id="numero" name="numero" type="text" value="{{ form_data.numero }}" {% if invoice %}readonly{% endif %} required placeholder="Ex: 001450745">
+                </div>
+                <div>
+                    <label for="pagante">Pagante</label>
+                    <input id="pagante" name="pagante" type="text" value="{{ form_data.pagante }}" placeholder="Ex: Empresa, cliente ou centro de custo">
+                </div>
+                <div>
+                    <label for="fornecedor">Fornecedor</label>
+                    <input id="fornecedor" name="fornecedor" type="text" value="{{ form_data.fornecedor }}" placeholder="Ex: Dell">
+                </div>
+                <div>
+                    <label for="data_compra">Data da compra</label>
+                    <input id="data_compra" name="data_compra" type="date" value="{{ form_data.data_compra }}">
+                </div>
+                <div class="full">
+                    <label for="arquivo_nf">Foto/PDF da NF</label>
+                    <input id="arquivo_nf" name="arquivo_nf" type="file" accept="image/*,.pdf,application/pdf">
+                    <div class="invoice-pdf-actions">
+                        <button type="button" class="btn btn-secondary" data-invoice-pdf-read data-read-url="{{ url_for('ler_pdf_nota_fiscal') }}">Ler PDF</button>
+                        <span class="field-hint" data-invoice-pdf-status></span>
+                    </div>
+                    <div class="field-hint">Se for PDF/DANFE com texto, o sistema tenta encontrar Service Tags do inventario e vincular sozinho.</div>
+                    <div class="invoice-pdf-preview is-hidden" data-invoice-pdf-result aria-live="polite"></div>
+                    {% if invoice and invoice.file_path %}
+                    <div class="field-hint">Ja existe anexo salvo: <a href="/{{ invoice.file_path }}" target="_blank" rel="noopener">{{ invoice.file_original_name or invoice.numero }}</a></div>
+                    {% endif %}
+                </div>
+                <div class="full">
+                    <label for="observacoes">Observacoes</label>
+                    <textarea id="observacoes" name="observacoes" rows="3" placeholder="Informacoes adicionais da compra">{{ form_data.observacoes }}</textarea>
+                </div>
+            </div>
+        </section>
+
+        <details class="form-section" open>
+            <summary><span>Vincular equipamentos por Service Tag</span></summary>
+            <div class="form-section-body">
+                <div class="grid">
+                    <div class="full">
+                        <label for="service_tags">Service Tags da NF</label>
+                        <textarea id="service_tags" name="service_tags" rows="7" placeholder="Cole uma por linha:&#10;CCS5703&#10;CCV7703&#10;ABC1234">{{ form_data.service_tags }}</textarea>
+                        <div class="field-hint">As tags encontradas serao vinculadas; as nao encontradas ficarao como pendencia da NF.</div>
+                    </div>
+                </div>
+            </div>
+        </details>
+
+        <details class="form-section">
+            <summary><span>Item sem Service Tag</span></summary>
+            <div class="form-section-body">
+                <div class="grid-3">
+                    <div class="field-wide">
+                        <label for="item_descricao">Descricao do item</label>
+                        <input id="item_descricao" name="item_descricao" type="text" value="{{ form_data.item_descricao }}" placeholder="Ex: Mouse Dell sem fio">
+                    </div>
+                    <div>
+                        <label for="item_quantidade">Quantidade</label>
+                        <input id="item_quantidade" name="item_quantidade" type="number" min="1" value="{{ form_data.item_quantidade or '1' }}">
+                    </div>
+                    <div class="full">
+                        <label for="item_observacoes">Observacao do item</label>
+                        <textarea id="item_observacoes" name="item_observacoes" rows="2" placeholder="Ex: Sem patrimonio, entregue em estoque">{{ form_data.item_observacoes }}</textarea>
+                    </div>
+                </div>
+            </div>
+        </details>
+
+        <div class="actions form-actions">
+            <button type="submit" class="btn btn-primary">Salvar NF</button>
+            <a href="{{ url_for('notas_fiscais') }}" class="btn btn-secondary">Cancelar</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

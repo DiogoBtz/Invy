@@ -1,0 +1,187 @@
+﻿{# Auditoria: filtros e linha do tempo das acoes do sistema. #}
+{% extends "base.html" %}
+{% block content %}
+
+<div class="topbar logs-topbar">
+    <div>
+        <h1>Auditoria</h1>
+        <div class="subtitle">Acompanhe quem fez, quando fez e qual equipamento ou colaborador foi afetado</div>
+    </div>
+</div>
+
+<div class="stats">
+    <div class="stat-box accent-blue"><h3>{{ resumo.total }}</h3><p>Registros exibidos</p></div>
+    <div class="stat-box accent-green"><h3>{{ resumo.estoque }}</h3><p>Devolucoes ao estoque</p></div>
+    <div class="stat-box accent-amber"><h3>{{ resumo.colaboradores }}</h3><p>Eventos de colaborador</p></div>
+    <div class="stat-box"><h3>{{ resumo.equipamentos }}</h3><p>Eventos de equipamento</p></div>
+</div>
+
+<div class="panel logs-panel audit-filter-panel">
+    <form class="audit-filter-form" method="get">
+        <div class="field-wide">
+            <label for="busca">Busca geral</label>
+            <input id="busca" type="text" name="busca" placeholder="Texto livre, patrimonio, Service Tag, NF, acao..." value="{{ busca }}">
+        </div>
+        <div>
+            <label for="usuario">Usuario do sistema</label>
+            <select id="usuario" name="usuario">
+                <option value="">Todos</option>
+                {% for item in usuarios_auditoria %}
+                <option value="{{ item }}" {% if usuario == item %}selected{% endif %}>{{ item }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="pessoa">Colaborador / equipamento</label>
+            <input id="pessoa" type="text" name="pessoa" list="pessoas_auditoria" placeholder="Ex: Halysson Sala, PAT000516..." value="{{ pessoa }}">
+            <datalist id="pessoas_auditoria">
+                {% for item in pessoas_auditoria %}
+                <option value="{{ item }}"></option>
+                {% endfor %}
+            </datalist>
+        </div>
+        <div>
+            <label for="acao">Acao</label>
+            <select id="acao" name="acao">
+                <option value="">Todas</option>
+                {% for item in acoes_auditoria %}
+                <option value="{{ item.value }}" {% if acao == item.value %}selected{% endif %}>{{ item.label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="entidade">Tipo</label>
+            <select id="entidade" name="entidade">
+                <option value="">Todos</option>
+                {% for item in entidades_auditoria %}
+                <option value="{{ item.value }}" {% if entidade == item.value %}selected{% endif %}>{{ item.label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div>
+            <label for="limite">Registros</label>
+            <select id="limite" name="limite">
+                {% for qtd in [50, 150, 300, 500] %}
+                <option value="{{ qtd }}" {% if limite == qtd %}selected{% endif %}>{{ qtd }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="audit-filter-actions">
+            <button type="submit" class="btn btn-primary">Filtrar auditoria</button>
+            <a href="{{ url_for('logs') }}" class="btn btn-secondary">Limpar</a>
+        </div>
+    </form>
+
+    {% if filtros_ativos %}
+    <div class="active-filter-bar">
+        <span>
+            {% if usuario %}Usuario: {{ usuario }}{% endif %}
+            {% if pessoa %}{% if usuario %} | {% endif %}Pessoa/equipamento: {{ pessoa }}{% endif %}
+            {% if acao %}{% if usuario or pessoa %} | {% endif %}Acao: {{ acao }}{% endif %}
+            {% if entidade %}{% if usuario or pessoa or acao %} | {% endif %}Tipo: {{ entidade }}{% endif %}
+            {% if busca %}{% if usuario or pessoa or acao or entidade %} | {% endif %}Busca: {{ busca }}{% endif %}
+            {% if limite != 150 %}{% if usuario or pessoa or acao or entidade or busca %} | {% endif %}Limite: {{ limite }}{% endif %}
+        </span>
+        <a href="{{ url_for('logs') }}">Remover filtros</a>
+    </div>
+    {% endif %}
+</div>
+
+<div class="audit-layout section-spacer">
+    <div class="panel audit-timeline-panel">
+        <div class="quality-section-head">
+            <div>
+                <span class="quality-kicker">Linha do tempo</span>
+                <div class="section-title">Eventos encontrados</div>
+            </div>
+        </div>
+
+        <div class="audit-timeline">
+            {% for log in logs %}
+            <article class="audit-event audit-event-{{ log.action_tone }}">
+                <div class="audit-event-marker"></div>
+                <div class="audit-event-card">
+                    <div class="audit-event-head">
+                        <div>
+                            <span class="log-action-pill action-{{ log.action_tone }}">{{ log.action_label }}</span>
+                            <strong>{{ log.entity_label }}</strong>
+                        </div>
+                        <time>{{ formatar_horario_br(log.created_at) }}</time>
+                    </div>
+                    <div class="audit-event-meta">
+                        <span class="log-user-cell">
+                            <span class="log-user-avatar" aria-hidden="true">{{ (log.username or '?')[:2]|upper }}</span>
+                            <span class="log-user-name">{{ log.username or '-' }}</span>
+                        </span>
+                        <span>Patrimonio: <strong>{{ audit_log_rfm_tag(log) }}</strong></span>
+                        {% if log.service_tag %}<span>Service Tag: <strong>{{ log.service_tag }}</strong></span>{% endif %}
+                    </div>
+                    <p>{{ log.details or 'Sem detalhes registrados.' }}</p>
+                    {% if log.changes %}
+                    <div class="audit-change-preview">
+                        {% for change in log.changes[:3] %}
+                        <span>{{ change.field_label }}: antes {{ change.old_display }} | depois {{ change.new_display }}</span>
+                        {% endfor %}
+                        {% if log.changes|length > 3 %}<span>+ {{ log.changes|length - 3 }} alteracao(oes)</span>{% endif %}
+                    </div>
+                    {% endif %}
+                    <div class="audit-event-actions">
+                        <a class="btn btn-secondary btn-compact" href="{{ url_for('log_detalhes', log_id=log.id) }}">Abrir detalhes</a>
+                        <a class="btn btn-outline btn-compact" href="{{ url_for('logs', usuario=log.username) }}">Acoes deste usuario</a>
+                        {% if audit_log_rfm_tag(log) != '-' %}
+                        <a class="btn btn-outline btn-compact" href="{{ url_for('logs', pessoa=audit_log_rfm_tag(log)) }}">Ver este equipamento</a>
+                        {% endif %}
+                    </div>
+                </div>
+            </article>
+            {% else %}
+            <div class="empty-state">Nenhum evento encontrado para os filtros informados.</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="panel audit-help-panel">
+        <div class="section-title">Como usar</div>
+        <div class="audit-help-list">
+            <div><strong>Usuario do sistema</strong><span>Mostra tudo que aquele login fez.</span></div>
+            <div><strong>Colaborador / equipamento</strong><span>Procura no resumo, patrimonio, Service Tag e campos alterados.</span></div>
+            <div><strong>Devolucao ao estoque</strong><span>Eventos em verde indicam equipamento ou saldo liberado.</span></div>
+        </div>
+    </div>
+</div>
+
+<div class="panel logs-panel section-spacer">
+    <div class="section-title">Tabela resumida</div>
+    <div class="table-wrap logs-table-wrap">
+        <table class="audit-table">
+            <thead>
+                <tr>
+                    <th>Data/Hora</th>
+                    <th>Usuario</th>
+                    <th>Acao</th>
+                    <th>Tipo</th>
+                    <th>Patrimonio</th>
+                    <th>Resumo</th>
+                    <th>Mais</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr>
+                    <td data-label="Data/Hora"><span class="log-time">{{ formatar_horario_br(log.created_at) }}</span></td>
+                    <td data-label="Usuario">{{ log.username or '-' }}</td>
+                    <td data-label="Acao"><span class="log-action-pill action-{{ log.action_tone }}">{{ log.action_label }}</span></td>
+                    <td data-label="Tipo"><span class="log-entity-pill">{{ log.entity_label }}</span></td>
+                    <td data-label="Patrimonio"><span class="asset-code log-asset">{{ audit_log_rfm_tag(log) }}</span></td>
+                    <td data-label="Resumo"><span class="log-summary">{{ log.details or '-' }}</span></td>
+                    <td data-label="Mais"><a class="btn btn-secondary btn-compact" href="{{ url_for('log_detalhes', log_id=log.id) }}">Detalhes</a></td>
+                </tr>
+                {% else %}
+                <tr><td class="empty-table-cell" colspan="7">Nenhum log encontrado.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}

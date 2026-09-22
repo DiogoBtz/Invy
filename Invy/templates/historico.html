@@ -1,0 +1,456 @@
+﻿{# Historico: consulta linha do tempo, eventos e responsaveis do equipamento. #}
+{% extends "base.html" %}
+{% block content %}
+
+<div class="topbar history-topbar">
+    <div>
+        <h1>Consulta do equipamento</h1>
+        <div class="subtitle">Pesquise por patrimonio, acessorio, Service Tag Dell, colaborador, pagante ou setor.</div>
+    </div>
+    {% if equipamento %}
+    <div class="page-actions">
+        {% if current_user.is_admin or current_user.can_edit %}
+        <a class="btn btn-primary" href="{{ url_for('editar_equipamento', equipamento_id=equipamento.id) }}">Editar equipamento</a>
+        {% endif %}
+        <button
+            id="btn-genai"
+            class="btn btn-outline"
+            type="button"
+            data-genai-url="{{ url_for('genai_equipamento_json', equipamento_id=equipamento.id) }}"
+        >Mostrar IA usada</button>
+        <a class="btn btn-secondary" href="{{ url_for('equipamentos') }}">Ver inventário</a>
+    </div>
+    {% endif %}
+</div>
+
+{# Os filtros sao enviados por GET para manter a pesquisa reproduzivel pela URL. #}
+<div class="panel history-filter-panel">
+    <form class="search-box history-search" method="get">
+        <div class="history-search-main">
+            <svg class="history-search-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="11" cy="11" r="6"></circle>
+                <path d="m16 16 4 4"></path>
+            </svg>
+            <input type="text" name="busca" placeholder="Patrimonio, acessório, Service Tag Dell, colaborador, pagante, setor..." value="{{ busca }}">
+        </div>
+
+        <select name="tipo_evento" aria-label="Tipo de evento">
+            <option value="">Todos os eventos</option>
+            {% for item in tipos_evento_historico %}
+            <option value="{{ item }}" {% if filtro_tipo == item %}selected{% endif %}>{{ item }}</option>
+            {% endfor %}
+        </select>
+
+        <input type="date" name="data_inicio" min="{{ data_minima }}" max="{{ data_hoje }}" value="{{ data_inicio or '' }}" aria-label="Data inicial">
+        <input type="date" name="data_fim" min="{{ data_minima }}" max="{{ data_hoje }}" value="{{ data_fim or '' }}" aria-label="Data final">
+        <button type="submit" class="btn btn-primary">Consultar equipamento</button>
+
+        {% if busca or service_tag or filtro_tipo or data_inicio or data_fim %}
+        <a class="btn btn-secondary" href="{{ url_for('historico_service_tag') }}">Limpar filtros</a>
+        {% endif %}
+    </form>
+
+    {% if busca or service_tag or filtro_tipo or data_inicio or data_fim %}
+    <div class="history-active-filters" aria-label="Filtros ativos">
+        {% if busca %}<span>Busca: {{ busca }}</span>{% endif %}
+        {% if service_tag %}<span>Service Tag: {{ service_tag }}</span>{% endif %}
+        {% if filtro_tipo %}<span>Evento: {{ filtro_tipo }}</span>{% endif %}
+        {% if data_inicio or data_fim %}<span>Período: {{ data_inicio or 'início' }} até {{ data_fim or data_hoje }}</span>{% endif %}
+    </div>
+    {% endif %}
+</div>
+
+{% if equipamentos_encontrados and not equipamento %}
+<div class="panel section-spacer history-results-panel">
+    <div class="section-title">Equipamentos encontrados</div>
+    <div class="section-note">Encontramos mais de um item. Selecione o cadastro correto para abrir a linha do tempo.</div>
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Usuário final</th>
+                    <th>Setor/Função</th>
+                    <th>Patrimonio</th>
+                    <th>Service Tag Dell</th>
+                    <th>Modelo / Equipamento</th>
+                    <th>Status</th>
+                    <th>Garantia</th>
+                    <th>Detalhes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for eq in equipamentos_encontrados %}
+                {% set garantia_eq = warranty_status(eq) %}
+                <tr>
+                    <td data-label="Usuário final">{{ eq.usuario_final or '-' }}</td>
+                    <td data-label="Setor/Função">{{ eq.setor_usuario or '-' }}</td>
+                    <td data-label="Patrimonio"><span class="asset-code">{{ eq.patrimonio or '-' }}</span></td>
+                    <td data-label="Service Tag Dell"><span class="service-code">{{ eq.service_tag or '-' }}</span></td>
+                    <td data-label="Modelo / Equipamento">{{ eq.nome_equipamento_rfm }}</td>
+                    <td data-label="Status"><span class="status-pill" data-status="{{ eq.status_equipamento|lower }}">{{ eq.status_equipamento }}</span></td>
+                    <td data-label="Garantia">
+                        <span class="warranty-pill" data-warranty="{{ garantia_eq.code }}">{{ garantia_eq.label }}</span>
+                        <small class="table-subline">{{ garantia_eq.date_label }}</small>
+                    </td>
+                    <td data-label="Detalhes">
+                        <div class="action-row">
+                            <a class="btn btn-secondary btn-compact" href="{{ url_for('historico_service_tag', equipamento_id=eq.id) }}">Abrir detalhes</a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% if equipamento %}
+{% set fotos_total = resumo.total_fotos_adicionadas + resumo.total_fotos_removidas %}
+<div class="stats history-stats section-spacer">
+    <div class="stat-box accent-blue"><h3>{{ resumo.total_eventos }}</h3><p>Eventos no histórico</p></div>
+    <div class="stat-box accent-green"><h3>{{ resumo.antigos_donos }}</h3><p>Responsáveis anteriores</p></div>
+    <div class="stat-box"><h3>{{ resumo.total_manutencoes }}</h3><p>Manutenções e suporte</p></div>
+    <div class="stat-box accent-amber"><h3>{{ fotos_total }}</h3><p>Fotos movimentadas</p></div>
+</div>
+
+<div id="genai-panel" class="panel acronis-panel acronis-inline-panel genai-panel section-spacer" style="display:none;">
+    <div class="acronis-hero acronis-hero-compact genai-hero">
+        <div class="acronis-hero-copy">
+            <span class="acronis-kicker">Acronis GenAI Protection</span>
+            <h2>IA usada na maquina</h2>
+            <p>{{ equipamento.patrimonio or equipamento.nome_equipamento_rfm or 'Consulta da maquina' }}</p>
+        </div>
+        <div class="acronis-brand-card">
+            <img src="{{ url_for('static', filename='images/acronis/acronis-white.png') }}" alt="Acronis">
+            <span id="genai-state-badge" class="acronis-status-badge is-muted">Aguardando consulta</span>
+        </div>
+    </div>
+
+    <div class="acronis-metric-grid acronis-metric-grid-compact genai-metric-grid">
+        <div class="acronis-metric">
+            <span>IAs detectadas</span>
+            <strong id="genai-total">-</strong>
+            <small>Apps encontrados</small>
+        </div>
+        <div class="acronis-metric">
+            <span>GenAI Protection</span>
+            <strong id="genai-coverage">Aguardando</strong>
+            <small id="genai-coverage-detail">Aguardando consulta</small>
+        </div>
+        <div class="acronis-metric">
+            <span>Alertas GenAI</span>
+            <strong id="genai-alerts-total">-</strong>
+            <small>Alert Manager</small>
+        </div>
+    </div>
+
+    <div id="genai-loading" class="acronis-loading" style="display:none;">
+        <span></span>
+        Consultando Acronis...
+    </div>
+    <div id="genai-message" class="empty-state acronis-message" style="display:none;"></div>
+
+    <div class="acronis-table-head section-spacer">
+        <div>
+            <span class="acronis-kicker">GenAI Protection</span>
+            <h3>Aplicativos de IA detectados</h3>
+        </div>
+    </div>
+    <div id="genai-table-wrap" class="table-wrap acronis-table-wrap" style="display:none;">
+        <table id="genai-table" class="table acronis-table" style="width:100%">
+            <thead>
+                <tr><th>IA</th><th>Aplicativo</th><th>Versao</th><th>Fornecedor</th><th>Fonte</th></tr>
+            </thead>
+            <tbody id="genai-tbody"></tbody>
+        </table>
+    </div>
+
+    <div id="genai-alerts-block" class="genai-alerts-block" style="display:none;">
+        <div class="acronis-table-head section-spacer">
+            <div>
+                <span class="acronis-kicker">Eventos e alertas</span>
+                <h3>Ocorrencias GenAI</h3>
+            </div>
+        </div>
+        <div class="table-wrap acronis-table-wrap">
+            <table class="table acronis-table" style="width:100%">
+                <thead>
+                    <tr><th>Ocorrencia</th><th>Severidade</th><th>Recurso</th><th>Data</th></tr>
+                </thead>
+                <tbody id="genai-alerts-tbody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="panel section-spacer history-current-panel">
+    <div class="history-panel-head">
+        <div>
+            <div class="section-title">Resumo atual</div>
+            <div class="section-note">Dados vivos do cadastro selecionado.</div>
+        </div>
+        {% set garantia_atual = warranty_status(equipamento) %}
+        <div class="history-summary-badges">
+            <span class="status-pill" data-status="{{ equipamento.status_equipamento|lower }}">{{ equipamento.status_equipamento }}</span>
+            <span class="warranty-pill" data-warranty="{{ garantia_atual.code }}">{{ garantia_atual.label }}</span>
+        </div>
+    </div>
+
+    {% set grupos_resumo = [
+        {
+            'titulo': 'Identificacao',
+            'itens': [
+                ('Patrimonio', equipamento.patrimonio),
+                ('Service Tag Dell', equipamento.service_tag),
+                ('Tipo', equipamento.tipo_equipamento),
+                ('Modelo / equipamento', equipamento.nome_equipamento_rfm),
+                ('Patrimonio da fonte', equipamento.numero_acessorio),
+                ('Patrimonio do monitor', equipamento.monitor_patrimonio)
+            ]
+        },
+        {
+            'titulo': 'Colaborador',
+            'itens': [
+                ('Usuario atual', equipamento.usuario_final),
+                ('E-mail', equipamento.email_colaborador),
+                ('CPF', mascarar_cpf(equipamento.cpf_colaborador)),
+                ('Empresa', equipamento.empresa_colaborador),
+                ('Setor/Funcao', equipamento.setor_usuario),
+                ('Departamento', equipamento.departamento),
+                ('Localizacao', equipamento.localizacao)
+            ]
+        },
+        {
+            'titulo': 'Compra e garantia',
+            'itens': [
+                ('Pagante', equipamento.pagante),
+                ('NF', equipamento.invoice.numero if equipamento.invoice else None),
+                ('Pagante do monitor', equipamento.monitor_pagante),
+                ('NF do monitor', equipamento.monitor_invoice.numero if equipamento.monitor_invoice else None),
+                ('Garantia Dell', garantia_atual.date_label if garantia_atual else None),
+                ('Status da garantia', garantia_atual.description if garantia_atual else None)
+            ]
+        },
+        {
+            'titulo': 'Suporte',
+            'itens': [
+                ('Ultimo servico', equipamento.servico_realizado),
+                ('Item/software alterado', equipamento.peca_trocada),
+                ('Descricao do ultimo servico', equipamento.descricao_servico)
+            ]
+        }
+    ] %}
+    <div class="history-summary-sections">
+        {% for grupo in grupos_resumo %}
+        <section class="history-summary-section">
+            <h3>{{ grupo.titulo }}</h3>
+            <div class="history-summary-list">
+                {% for label, value in grupo.itens %}
+                <div class="history-summary-item">
+                    <span>{{ label }}</span>
+                    <strong>{{ value or '-' }}</strong>
+                </div>
+                {% endfor %}
+            </div>
+        </section>
+        {% endfor %}
+    </div>
+
+    {% if equipamento.fotos %}
+    <div class="history-photo-section">
+        <div class="section-title">Fotos atuais</div>
+        <div class="thumb-grid history-photo-grid">
+            {% for foto in equipamento.fotos %}
+            <div class="thumb-card">
+                <a class="thumb-image-link" href="/{{ foto.file_path }}" target="_blank" rel="noopener">
+                    <img src="/{{ foto.file_path }}" alt="Foto do equipamento">
+                </a>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<div class="panel section-spacer owners-panel history-owners-panel">
+    <div class="history-panel-head">
+        <div>
+            <div class="section-title">Responsáveis pela máquina</div>
+            <div class="section-note">Sequência consolidada por usuário final, sem repetir eventos iguais.</div>
+        </div>
+    </div>
+
+    {% if donos_notebook %}
+    <div class="owner-timeline history-owner-timeline">
+        {% for dono in donos_notebook %}
+        <article class="owner-card {% if dono.atual %}is-current{% endif %}">
+            <div class="owner-main">
+                <strong>{{ dono.usuario }}</strong>
+                <span class="badge">{% if dono.atual %}Atual{% else %}Anterior{% endif %}</span>
+            </div>
+
+            {% set owner_meta = [dono.empresa, dono.setor, dono.departamento, dono.localizacao] %}
+            {% if dono.empresa or dono.setor or dono.departamento or dono.localizacao %}
+            <div class="owner-meta">
+                {% for value in owner_meta if value %}
+                <span>{{ value }}</span>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <div class="owner-dates">
+                <div class="owner-date">
+                    <span>Entrada</span>
+                    <strong>{{ dono.inicio.strftime('%d/%m/%Y') if dono.inicio else '-' }}</strong>
+                </div>
+                <div class="owner-date">
+                    <span>{% if dono.atual %}Situação{% else %}Saída{% endif %}</span>
+                    <strong>{{ 'Atual' if dono.atual else (dono.fim.strftime('%d/%m/%Y') if dono.fim else '-') }}</strong>
+                </div>
+            </div>
+
+            <div class="owner-event">
+                <span>{{ dono.primeiro_evento }}</span>
+                {% if dono.eventos > 1 %}<span>{{ dono.eventos }} eventos consolidados</span>{% endif %}
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">Nenhum responsável registrado no histórico desta máquina.</div>
+    {% endif %}
+</div>
+
+<div class="panel section-spacer history-timeline-panel">
+    <div class="history-panel-head">
+        <div>
+            <div class="section-title">Linha do tempo</div>
+            <div class="section-note">Eventos ordenados do mais recente para o mais antigo.</div>
+        </div>
+        <span class="history-count-pill">{{ resumo.total_eventos }} evento(s)</span>
+    </div>
+
+    <div class="history-event-list">
+        {% for item in historicos %}
+        <article class="history-event-card" data-history-card>
+            <div class="history-event-marker" aria-hidden="true"></div>
+            <div class="history-event-body">
+                <header class="history-event-head">
+                    <div>
+                        <span class="badge history-event-type">{{ item.tipo_evento }}</span>
+                        <h2>{{ item.titulo_evento or item.servico_realizado or item.tipo_evento }}</h2>
+                        <div class="history-event-meta">
+                            <span>{{ item.data_evento.strftime('%d/%m/%Y') if item.data_evento else '-' }}</span>
+                            <span>Registrado {{ formatar_horario_br(item.created_at) }}</span>
+                            <span>Por {{ item.usuario_responsavel or '-' }}</span>
+                        </div>
+                    </div>
+                </header>
+
+                {% if item.descricao_evento %}
+                <p class="history-event-description">{{ item.descricao_evento }}</p>
+                {% endif %}
+
+                {% if item.usuario_final or item.pagante or item.status_equipamento or item.setor_usuario or item.peca_trocada or item.fotos %}
+                <div class="history-event-highlights">
+                    {% if item.usuario_final %}
+                    <span><strong>Usuário</strong>{{ item.usuario_final }}</span>
+                    {% endif %}
+                    {% if item.pagante %}
+                    <span><strong>Pagante</strong>{{ item.pagante }}</span>
+                    {% endif %}
+                    {% if item.status_equipamento %}
+                    <span><strong>Status</strong>{{ item.status_equipamento }}</span>
+                    {% endif %}
+                    {% if item.setor_usuario %}
+                    <span><strong>Setor</strong>{{ item.setor_usuario }}</span>
+                    {% endif %}
+                    {% if item.peca_trocada %}
+                    <span><strong>Item/Software</strong>{{ item.peca_trocada }}</span>
+                    {% endif %}
+                    {% if item.fotos %}
+                    <span><strong>Fotos</strong>{{ item.fotos|length }}</span>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                {% if item.resumo_alteracoes_itens %}
+                <div class="history-change-list">
+                    {% for alteracao in item.resumo_alteracoes_itens %}
+                    <span>{{ alteracao }}</span>
+                    {% endfor %}
+                </div>
+                {% endif %}
+
+                <details class="history-event-details" data-history-details>
+                    <summary>Ver detalhes do evento</summary>
+
+                    {% set detalhe_evento = [
+                        ('Usuário', item.usuario_final),
+                        ('Empresa do colaborador', item.empresa_colaborador),
+                        ('Pagante', item.pagante),
+                        ('Setor/Função', item.setor_usuario),
+                        ('Departamento', item.departamento),
+                        ('Localização', item.localizacao),
+                        ('Status', item.status_equipamento),
+                        ('Serviço', item.servico_realizado),
+                        ('Técnico', item.tecnico),
+                        ('Item/Software alterado', item.peca_trocada),
+                        ('Fotos registradas', (item.fotos_registradas ~ ' foto(s)') if item.fotos_registradas else None)
+                    ] %}
+                    {% if item.usuario_final or item.empresa_colaborador or item.pagante or item.setor_usuario or item.departamento or item.localizacao or item.status_equipamento or item.servico_realizado or item.tecnico or item.peca_trocada or item.fotos_registradas %}
+                    <div class="history-field-grid">
+                        {% for label, value in detalhe_evento if value %}
+                        <div>
+                            <span>{{ label }}</span>
+                            <strong>{{ value }}</strong>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
+                    {% set textos_evento = [
+                        ('Descrição do serviço', item.descricao_evento or item.descricao_servico),
+                        ('Observações', item.observacoes)
+                    ] %}
+                    {% for label, value in textos_evento if value %}
+                    <div class="history-text-block">
+                        <strong>{{ label }}</strong>
+                        <p>{{ value }}</p>
+                    </div>
+                    {% endfor %}
+
+                    {% if item.fotos %}
+                    <div class="history-photo-section">
+                        <strong>Fotos deste evento</strong>
+                        <div class="thumb-grid history-photo-grid">
+                            {% for foto in item.fotos %}
+                            <div class="thumb-card">
+                                <a class="thumb-image-link" href="/{{ foto.file_path }}" target="_blank" rel="noopener">
+                                    <img src="/{{ foto.file_path }}" alt="Foto do evento histórico">
+                                </a>
+                                <span class="photo-action-badge">
+                                    {% if foto.action_type == 'added' %}Foto adicionada{% elif foto.action_type == 'deleted' %}Foto removida{% else %}Snapshot do evento{% endif %}
+                                </span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </details>
+            </div>
+        </article>
+        {% else %}
+        <div class="empty-state">Nenhum histórico encontrado para esta máquina.</div>
+        {% endfor %}
+    </div>
+</div>
+{% elif busca and not equipamentos_encontrados %}
+<div class="panel section-spacer">
+    <div class="empty-state">Nenhum histórico encontrado para o termo pesquisado.</div>
+</div>
+{% endif %}
+
+{% endblock %}

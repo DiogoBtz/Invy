@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="license-page-shell">
+    <div class="license-page-hero {% if resultado.mandatory and resultado.update_available %}is-mandatory{% endif %}">
+        <div>
+            <span class="license-eyebrow">Atualizacao do Invy</span>
+            {% if resultado.update_available %}
+                <h1>Versao {{ resultado.latest_version }} disponivel</h1>
+                <p>
+                    {% if resultado.mandatory %}
+                        Esta atualizacao e obrigatoria para continuar usando o sistema.
+                    {% else %}
+                        Existe uma nova versao disponivel. Voce pode baixar agora ou continuar depois.
+                    {% endif %}
+                </p>
+            {% elif resultado.ok %}
+                <h1>Invy atualizado</h1>
+                <p>{{ resultado.message or 'Sua instalacao ja esta na versao mais recente.' }}</p>
+            {% else %}
+                <h1>Nao foi possivel verificar</h1>
+                <p>{{ resultado.message or 'A atualizacao gerenciada nao respondeu agora.' }}</p>
+            {% endif %}
+        </div>
+        <div class="license-version-card">
+            <span>Versao instalada</span>
+            <strong>{{ resultado.current_version or invy_app_version() }}</strong>
+            <span>Versao liberada</span>
+            <strong>{{ resultado.latest_version or '-' }}</strong>
+        </div>
+    </div>
+
+    <div class="license-page-grid">
+        <section class="content-card">
+            <div class="section-title">Detalhes</div>
+            <div class="license-info-list">
+                <div>
+                    <span>Status</span>
+                    <strong>
+                        {% if resultado.update_available %}
+                            {{ 'Obrigatoria' if resultado.mandatory else 'Opcional' }}
+                        {% elif resultado.ok %}
+                            Atualizado
+                        {% else %}
+                            Indisponivel
+                        {% endif %}
+                    </strong>
+                </div>
+                <div>
+                    <span>Ultima consulta</span>
+                    <strong>
+                        {% if resultado.checked_at %}
+                            {{ formatar_horario_br(resultado.checked_at) }}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </strong>
+                </div>
+                <div>
+                    <span>Download</span>
+                    <strong>{{ 'Disponivel' if resultado.update_url else 'Sem link' }}</strong>
+                </div>
+            </div>
+
+            {% if resultado.notes %}
+                <div class="license-notes">
+                    <strong>Notas da atualizacao</strong>
+                    <p>{{ resultado.notes }}</p>
+                </div>
+            {% endif %}
+
+            <div class="license-page-actions">
+                {% if resultado.update_available and resultado.update_url %}
+                    <a class="btn btn-primary" href="{{ resultado.update_url }}">Baixar agora</a>
+                {% endif %}
+                {% if not resultado.mandatory %}
+                    <a class="btn btn-secondary" href="{{ url_for('dashboard') }}">Depois</a>
+                {% endif %}
+                <a class="btn btn-secondary" href="{{ url_for('atualizacao_cliente', force='1') }}">Verificar novamente</a>
+            </div>
+        </section>
+
+        <section class="content-card">
+            <div class="section-title">Suporte</div>
+            <p class="muted-text">Se a atualizacao estiver obrigatoria e o download nao abrir, fale com o suporte.</p>
+            <div class="license-support-actions inline">
+                {% if support.whatsapp_url %}
+                    <a class="btn btn-primary" href="{{ support.whatsapp_url }}" target="_blank" rel="noopener">WhatsApp</a>
+                {% endif %}
+                {% if support.email %}
+                    <a class="btn btn-secondary" href="mailto:{{ support.email }}">E-mail</a>
+                {% endif %}
+            </div>
+            <p class="muted-text">
+                {% if support.phone %}{{ support.phone }}{% endif %}
+                {% if support.phone and support.email %} / {% endif %}
+                {% if support.email %}{{ support.email }}{% endif %}
+            </p>
+        </section>
+    </div>
+</section>
+{% endblock %}

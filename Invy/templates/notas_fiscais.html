@@ -1,0 +1,108 @@
+{# Lista central de notas fiscais. #}
+{% extends "base.html" %}
+
+{% block content %}
+<div class="topbar">
+    <div>
+        <h1>Notas Fiscais</h1>
+        <div class="subtitle">Compras, anexos, equipamentos vinculados e pendencias</div>
+    </div>
+    <div class="page-actions">
+        {% if current_user.can_create or current_user.is_admin %}
+        <a class="btn btn-secondary" href="{{ url_for('importar_lote_notas_fiscais') }}">Importar DANFEs em lote</a>
+        <a class="btn btn-new-invoice" href="{{ url_for('nova_nota_fiscal') }}">
+            <span aria-hidden="true">+</span>
+            Nova nota NF
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="stats">
+    <div class="stat-box"><h3>{{ resumo.filtradas }}</h3><p>Filtradas</p></div>
+    <div class="stat-box"><h3>{{ resumo.total }}</h3><p>Total</p></div>
+    <div class="stat-box"><h3>{{ resumo.com_anexo }}</h3><p>Com anexo</p></div>
+    <div class="stat-box accent-amber"><h3>{{ resumo.pendencias }}</h3><p>Pendencias</p></div>
+    <div class="stat-box"><h3>{{ resumo.itens_sem_tag }}</h3><p>Itens sem tag</p></div>
+</div>
+
+<div class="panel inventory-panel">
+    <form class="inventory-filter-form" method="get" action="{{ url_for('notas_fiscais') }}">
+        <div class="search-box">
+            <input type="text" name="busca" placeholder="Buscar por NF, pagante, fornecedor, Service Tag ou item" value="{{ busca }}" autofocus>
+        </div>
+        <div class="actions">
+            <button type="submit" class="btn btn-secondary">Filtrar</button>
+            <a class="btn btn-secondary" href="{{ url_for('notas_fiscais') }}">Limpar</a>
+        </div>
+    </form>
+
+    <div class="table-note">
+        {% if invoices %}
+        Exibindo {{ invoices|length }} nota(s).
+        {% else %}
+        Nenhuma nota fiscal encontrada.
+        {% endif %}
+    </div>
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Numero NF</th>
+                    <th>Pagante</th>
+                    <th>Fornecedor</th>
+                    <th>Data compra</th>
+                    <th>Equipamentos</th>
+                    <th>Pendencias</th>
+                    <th>Itens sem tag</th>
+                    <th>Anexo</th>
+                    <th>Acoes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for invoice in invoices %}
+                <tr>
+                    <td data-label="Numero NF"><a class="service-code" href="{{ url_for('detalhe_nota_fiscal', invoice_id=invoice.id) }}">{{ invoice.numero }}</a></td>
+                    <td data-label="Pagante">{{ invoice.pagante or '-' }}</td>
+                    <td data-label="Fornecedor">{{ invoice.fornecedor or '-' }}</td>
+                    <td data-label="Data compra">{{ invoice.data_compra.strftime('%d/%m/%Y') if invoice.data_compra else '-' }}</td>
+                    <td data-label="Equipamentos">{{ invoice.total_equipamentos_vinculados }}</td>
+                    <td data-label="Pendencias">{{ invoice.pending_tags|length }}</td>
+                    <td data-label="Itens sem tag">{{ invoice.items|length }}</td>
+                    <td data-label="Anexo">
+                        {% if invoice.file_path %}
+                        <a href="/{{ invoice.file_path }}" target="_blank" rel="noopener">Abrir</a>
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                    <td data-label="Acoes">
+                        <div class="action-row">
+                            <a class="btn btn-secondary" href="{{ url_for('detalhe_nota_fiscal', invoice_id=invoice.id) }}">Ver</a>
+                            {% if current_user.can_edit or current_user.is_admin %}
+                            <a class="btn btn-secondary" href="{{ url_for('editar_nota_fiscal', invoice_id=invoice.id) }}">Editar</a>
+                            {% endif %}
+                            {% if current_user.can_delete or current_user.is_admin %}
+                            <form class="inline-action-form" method="post" action="{{ url_for('excluir_nota_fiscal', invoice_id=invoice.id) }}">
+                                {{ csrf_input()|safe }}
+                                <button
+                                    class="btn btn-danger"
+                                    type="submit"
+                                    data-confirm="Excluir a NF {{ invoice.numero }}? Os equipamentos continuam no inventario, mas o vinculo da NF, itens sem tag, pendencias e responsabilidades destes itens serao removidos."
+                                >
+                                    Excluir
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="9">Nenhuma nota fiscal encontrada.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

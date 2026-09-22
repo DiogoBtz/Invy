@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block content %}
+{% set erro_acronis = acronis.error if acronis else '' %}
+{% set identificadores = acronis.searched_identifiers if acronis else [] %}
+{% set dispositivo_software = acronis.software_device if acronis else none %}
+{% set total_apps = aplicativos|length %}
+{% set agente_nome = (agente.get('hostname') or agente.get('name') or agente.get('id')) if agente else '' %}
+{% set dispositivo_nome = (dispositivo_software.get('name') or dispositivo_software.get('hostname') or dispositivo_software.get('id')) if dispositivo_software else '' %}
+{% set nome_consulta = agente_nome or dispositivo_nome or (equipamento.patrimonio or equipamento.nome_equipamento_rfm) %}
+{% set data_varredura = acronis.scan_time_display or ((dispositivo_software.get('scan_time') or dispositivo_software.get('last_scan_time') or dispositivo_software.get('updated_at')) if dispositivo_software else '') %}
+
+<div class="topbar">
+    <div>
+        <h1>Softwares instalados</h1>
+        <div class="subtitle">{{ equipamento.patrimonio or equipamento.nome_equipamento_rfm }}</div>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-outline" href="{{ url_for('editar_equipamento', equipamento_id=equipamento.id) }}">Voltar ao equipamento</a>
+    </div>
+</div>
+
+<div class="panel acronis-panel">
+    <div class="acronis-hero">
+        <div class="acronis-hero-copy">
+            <span class="acronis-kicker">Acronis Cyber Protect</span>
+            <h2>Inventario de software</h2>
+            <p>{{ nome_consulta }}</p>
+        </div>
+        <div class="acronis-brand-card">
+            <img src="{{ url_for('static', filename='images/acronis/acronis-white.png') }}" alt="Acronis">
+            {% if erro_acronis %}
+            <span class="acronis-status-badge is-warning">Com alerta</span>
+            {% elif agente or dispositivo_software %}
+            <span class="acronis-status-badge is-online">Conectado</span>
+            {% else %}
+            <span class="acronis-status-badge is-muted">Aguardando dados</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="acronis-metric-grid">
+        <div class="acronis-metric">
+            <span>Aplicativos</span>
+            <strong>{{ total_apps }}</strong>
+            <small>Itens retornados pela consulta</small>
+        </div>
+        <div class="acronis-metric">
+            <span>Status</span>
+            <strong>{% if erro_acronis %}Com alerta{% elif agente or dispositivo_software %}Conectado{% else %}Aguardando{% endif %}</strong>
+            <small>{% if agente %}Agente encontrado{% elif dispositivo_software %}Inventario de software{% else %}Sem agente localizado{% endif %}</small>
+        </div>
+        <div class="acronis-metric">
+            <span>Ultima varredura</span>
+            <strong>{{ data_varredura or '-' }}</strong>
+            <small>Software Inventory</small>
+        </div>
+    </div>
+
+    {% if erro_acronis %}
+    <div class="empty-state acronis-message acronis-message-warning">{{ erro_acronis }}</div>
+    {% endif %}
+
+    {% if aplicativos %}
+    <div class="acronis-table-head section-spacer">
+        <div>
+            <span class="acronis-kicker">Software Inventory</span>
+            <h3>Aplicativos instalados</h3>
+        </div>
+    </div>
+    <div class="table-wrap acronis-table-wrap">
+        <table class="acronis-table">
+            <thead>
+                <tr>
+                    <th>Software</th>
+                    <th>Versao</th>
+                    <th>Fornecedor</th>
+                    <th>Instalado em</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for software in aplicativos %}
+                <tr>
+                    <td data-label="Software">
+                        <strong class="acronis-software-name">{{ software.get('name') or software.get('displayName') or software.get('applicationName') or '-' }}</strong>
+                    </td>
+                    <td data-label="Versao">{{ software.get('version') or software.get('displayVersion') or software.get('applicationVersion') or '-' }}</td>
+                    <td data-label="Fornecedor">{{ software.get('publisher') or software.get('vendor') or '-' }}</td>
+                    <td data-label="Instalado em">{{ software.get('install_date') or software.get('installDate') or software.get('installedAt') or '-' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% elif (agente or dispositivo_software) and not erro_acronis %}
+    <div class="empty-state">Nenhum software retornado pelo Acronis para este agente.</div>
+    {% endif %}
+</div>
+
+{% endblock %}

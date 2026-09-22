@@ -1,0 +1,622 @@
+﻿{# Formulario reutilizado para cadastro e edicao de equipamento. #}
+{% extends "base.html" %}
+{% from "macros/forms.html" import input_field, select_field, textarea_field with context %}
+
+{% block content %}
+{# Abre automaticamente secoes que ja possuem informacao preenchida. #}
+{% set em_estoque = equipamento.get('status_equipamento') == 'Estoque' %}
+{% set exige_especificacoes = equipamento.get('tipo_equipamento') in ['Notebook', 'Desktop'] %}
+{% set inventario_aberto = (not em_estoque) and (equipamento.get('usuario_final') or equipamento.get('email_colaborador') or equipamento.get('cpf_colaborador') or equipamento.get('empresa_colaborador') or equipamento.get('setor_usuario') or equipamento.get('departamento') or equipamento.get('data_troca_dono')) %}
+{% set pagante_aberto = equipamento.get('pagante') or equipamento.get('nota_fiscal_numero') or equipamento.get('monitor_pagante') or equipamento.get('monitor_nota_fiscal_numero') %}
+{% set servico_aberto = exige_especificacoes and (form_modo == 'editar' or equipamento.get('servico_realizado') or equipamento.get('tecnico_formatou') or equipamento.get('data_servico') or equipamento.get('peca_trocada') or equipamento.get('descricao_servico')) %}
+{% set acessorio_aberto = equipamento.get('numero_acessorio') or equipamento.get('nome_acessorio_rfm') or equipamento.get('monitor_patrimonio') %}
+{% set equipamentos_mesma_nf = nota_fiscal.equipments if nota_fiscal else [] %}
+{% set equipamentos_mesma_nf_monitor = monitor_nota_fiscal.monitor_equipments if monitor_nota_fiscal else [] %}
+
+<div class="topbar">
+    <div>
+        <h1>{{ titulo }}</h1>
+        <div class="subtitle">Registro do inventário de TI</div>
+    </div>
+    <div class="page-actions">
+        {% if form_modo == 'editar' and equipamento_id and equipamento.get('service_tag') %}
+        <form class="inline-action-form" method="post" action="{{ url_for('atualizar_garantia_dell', equipamento_id=equipamento_id) }}">
+            {{ csrf_input()|safe }}
+            <input type="hidden" name="next" value="{{ next_url or url_for('editar_equipamento', equipamento_id=equipamento_id) }}">
+            <button type="submit" class="btn btn-secondary">Atualizar garantia Dell</button>
+        </form>
+        {% endif %}
+        {% if form_modo == 'editar' and equipamento_id %}
+        <button id="btn-softwares" class="btn btn-outline" type="button" data-softwares-url="{{ url_for('softwares_equipamento_json', equipamento_id=equipamento_id) }}">Mostrar softwares da maquina</button>
+        <button
+            id="btn-genai"
+            class="btn btn-outline"
+            type="button"
+            data-genai-url="{{ url_for('genai_equipamento_json', equipamento_id=equipamento_id) }}"
+        >Mostrar IA usada</button>
+        {% endif %}
+        <a class="btn btn-outline" href="{{ url_for('equipamentos') }}">Voltar</a>
+    </div>
+</div>
+
+    <div id="softwares-panel" class="panel acronis-panel acronis-inline-panel" style="display:none; margin: 1rem 0;">
+        <div class="acronis-hero acronis-hero-compact">
+            <div class="acronis-hero-copy">
+                <span class="acronis-kicker">Acronis Cyber Protect</span>
+                <h2>Inventario de software</h2>
+                <p>{{ equipamento.get('patrimonio') or equipamento.get('nome_equipamento_rfm') or 'Consulta da maquina' }}</p>
+            </div>
+            <div class="acronis-brand-card">
+                <img src="{{ url_for('static', filename='images/acronis/acronis-white.png') }}" alt="Acronis">
+                <span id="softwares-state-badge" class="acronis-status-badge is-muted">Aguardando consulta</span>
+            </div>
+        </div>
+
+        <div class="acronis-metric-grid acronis-metric-grid-compact">
+            <div class="acronis-metric">
+                <span>Aplicativos</span>
+                <strong id="softwares-total">-</strong>
+                <small>Itens retornados</small>
+            </div>
+            <div class="acronis-metric">
+                <span>Status</span>
+                <strong id="softwares-status">Aguardando</strong>
+                <small id="softwares-meta" style="display:none;"></small>
+            </div>
+            <div class="acronis-metric">
+                <span>Ultima varredura</span>
+                <strong id="softwares-scan-date">-</strong>
+                <small id="softwares-scan">Aguardando consulta</small>
+            </div>
+        </div>
+
+        <div id="softwares-loading" class="acronis-loading" style="display:none;">
+            <span></span>
+            Consultando Acronis...
+        </div>
+        <div id="softwares-message" class="empty-state acronis-message" style="display:none;"></div>
+
+        <div class="acronis-table-head section-spacer">
+            <div>
+                <span class="acronis-kicker">Software Inventory</span>
+                <h3>Aplicativos instalados</h3>
+            </div>
+        </div>
+        <div id="softwares-table-wrap" class="table-wrap acronis-table-wrap" style="display:none;">
+            <table id="softwares-table" class="table acronis-table" style="width:100%">
+                <thead>
+                    <tr><th>Software</th><th>Versao</th><th>Fornecedor</th><th>Instalado em</th></tr>
+                </thead>
+                <tbody id="softwares-tbody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="genai-panel" class="panel acronis-panel acronis-inline-panel genai-panel" style="display:none; margin: 1rem 0;">
+        <div class="acronis-hero acronis-hero-compact genai-hero">
+            <div class="acronis-hero-copy">
+                <span class="acronis-kicker">Acronis GenAI Protection</span>
+                <h2>IA usada na maquina</h2>
+                <p>{{ equipamento.get('patrimonio') or equipamento.get('nome_equipamento_rfm') or 'Consulta da maquina' }}</p>
+            </div>
+            <div class="acronis-brand-card">
+                <img src="{{ url_for('static', filename='images/acronis/acronis-white.png') }}" alt="Acronis">
+                <span id="genai-state-badge" class="acronis-status-badge is-muted">Aguardando consulta</span>
+            </div>
+        </div>
+
+        <div class="acronis-metric-grid acronis-metric-grid-compact genai-metric-grid">
+            <div class="acronis-metric">
+                <span>IAs detectadas</span>
+                <strong id="genai-total">-</strong>
+                <small>Apps encontrados</small>
+            </div>
+            <div class="acronis-metric">
+                <span>GenAI Protection</span>
+                <strong id="genai-coverage">Aguardando</strong>
+                <small id="genai-coverage-detail">Aguardando consulta</small>
+            </div>
+            <div class="acronis-metric">
+                <span>Alertas GenAI</span>
+                <strong id="genai-alerts-total">-</strong>
+                <small>Alert Manager</small>
+            </div>
+        </div>
+
+        <div id="genai-loading" class="acronis-loading" style="display:none;">
+            <span></span>
+            Consultando Acronis...
+        </div>
+        <div id="genai-message" class="empty-state acronis-message" style="display:none;"></div>
+
+        <div class="acronis-table-head section-spacer">
+            <div>
+                <span class="acronis-kicker">GenAI Protection</span>
+                <h3>Aplicativos de IA detectados</h3>
+            </div>
+        </div>
+        <div id="genai-table-wrap" class="table-wrap acronis-table-wrap" style="display:none;">
+            <table id="genai-table" class="table acronis-table" style="width:100%">
+                <thead>
+                    <tr><th>IA</th><th>Aplicativo</th><th>Versao</th><th>Fornecedor</th><th>Fonte</th></tr>
+                </thead>
+                <tbody id="genai-tbody"></tbody>
+            </table>
+        </div>
+
+        <div id="genai-alerts-block" class="genai-alerts-block" style="display:none;">
+            <div class="acronis-table-head section-spacer">
+                <div>
+                    <span class="acronis-kicker">Eventos e alertas</span>
+                    <h3>Ocorrencias GenAI</h3>
+                </div>
+            </div>
+            <div class="table-wrap acronis-table-wrap">
+                <table class="table acronis-table" style="width:100%">
+                    <thead>
+                        <tr><th>Ocorrencia</th><th>Severidade</th><th>Recurso</th><th>Data</th></tr>
+                    </thead>
+                    <tbody id="genai-alerts-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+<div class="panel form-panel equipment-form-panel">
+    <form class="equipment-form" method="post" enctype="multipart/form-data" data-form-mode="{{ form_modo }}">
+        {{ csrf_input()|safe }}
+        {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
+
+        {% if alertas_cadastro %}
+        <div class="form-alert-stack">
+            {% for alerta in alertas_cadastro %}
+            <div class="form-alert form-alert-{{ alerta.nivel }}">
+                <strong>{{ alerta.titulo }}</strong>
+                <span>{{ alerta.texto }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <section class="form-block primary-block">
+            <div class="section-title">Dados principais</div>
+            <div class="grid cadastro-main-grid">
+                {{ select_field('tipo_equipamento', 'Tipo', tipos_equipamento, required=True) }}
+                {{ input_field('patrimonio', 'Patrimonio', required=exige_patrimonio, placeholder='Ex: PAT000523') }}
+                {{ input_field('service_tag', 'Service Tag Dell', required=exige_service_tag, placeholder='Ex: ABC1234') }}
+                <div class="field-wide">
+                    <label for="nome_equipamento_rfm"><span data-item-model-label>Nome / modelo do item cadastrado</span><span class="required-marker" aria-hidden="true">*</span></label>
+                    <input
+                        id="nome_equipamento_rfm"
+                        type="text"
+                        name="nome_equipamento_rfm"
+                        value="{{ equipamento.get('nome_equipamento_rfm', '') }}"
+                        required
+                    >
+                </div>
+                <div data-stock-quantity-field>
+                    <label for="quantidade_estoque">Quantidade em estoque<span class="required-marker" aria-hidden="true">*</span></label>
+                    <input
+                        id="quantidade_estoque"
+                        type="number"
+                        name="quantidade_estoque"
+                        value="{{ equipamento.get('quantidade_estoque', '1') or '1' }}"
+                        min="1"
+                        max="100000"
+                        required
+                    >
+                    <div class="field-hint">Use para lotes sem patrimônio individual, como 5 mouses do mesmo modelo.</div>
+                </div>
+                {{ input_field('marca', 'Marca') }}
+                {{ input_field('windows_versao', 'Versão do Windows', required=exige_especificacoes) }}
+                {{ input_field('armazenamento_gb', 'Armazenamento (GB)', type='number', required=exige_especificacoes, min_value='1', max_value='100000') }}
+                {{ input_field('memoria_gb', 'Memória RAM (GB)', type='number', required=exige_especificacoes, min_value='1', max_value='2048') }}
+                {{ input_field('processador', 'Processador', required=exige_especificacoes, classes='field-wide') }}
+                {{ select_field('status_equipamento', 'Status', status_equipamento, required=True) }}
+            </div>
+        </section>
+
+        <details class="form-section" id="fonte-notebook" data-power-adapter-section {% if acessorio_aberto %}open{% endif %}>
+            <summary>
+                <span>Fonte / Carregador e monitor do notebook</span>
+                {% if equipamento.get('numero_acessorio') or equipamento.get('monitor_patrimonio') %}
+                <strong>
+                    {% if equipamento.get('numero_acessorio') %}Fonte: {{ equipamento.get('numero_acessorio') }}{% endif %}
+                    {% if equipamento.get('numero_acessorio') and equipamento.get('monitor_patrimonio') %} | {% endif %}
+                    {% if equipamento.get('monitor_patrimonio') %}Monitor: {{ equipamento.get('monitor_patrimonio') }}{% endif %}
+                </strong>
+                {% endif %}
+            </summary>
+            <div class="form-section-body">
+                <div class="adapter-link-card">
+                    <div>
+                        <span>Status dos acessorios</span>
+                        {% if equipamento.get('numero_acessorio') or equipamento.get('monitor_patrimonio') %}
+                        <strong>Acessorios vinculados ao notebook</strong>
+                        <small>
+                            {% if equipamento.get('numero_acessorio') %}Fonte/carregador: {{ equipamento.get('numero_acessorio') }}{% endif %}
+                            {% if equipamento.get('numero_acessorio') and equipamento.get('monitor_patrimonio') %} | {% endif %}
+                            {% if equipamento.get('monitor_patrimonio') %}Monitor: {{ equipamento.get('monitor_patrimonio') }}{% endif %}
+                        </small>
+                        {% else %}
+                        <strong>Sem acessorios vinculados</strong>
+                        <small>Informe o patrimonio da fonte/carregador e do monitor quando eles acompanharem a maquina.</small>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="grid-3 section-spacer">
+                    <div>
+                        <label for="numero_acessorio">Patrimonio da fonte/carregador</label>
+                        <input
+                            id="numero_acessorio"
+                            name="numero_acessorio"
+                            type="text"
+                            value="{{ equipamento.get('numero_acessorio', '') }}"
+                            placeholder="Ex: PAT000355"
+                        >
+                        <div class="field-hint">Informe quando a fonte/carregador tiver patrimonio fisico.</div>
+                    </div>
+                    <div>
+                        <label for="monitor_patrimonio">Patrimonio do monitor</label>
+                        <input
+                            id="monitor_patrimonio"
+                            name="monitor_patrimonio"
+                            type="text"
+                            value="{{ equipamento.get('monitor_patrimonio', '') }}"
+                            placeholder="Ex: MON000128"
+                        >
+                        <div class="field-hint">Informe quando o colaborador usa monitor junto com o notebook.</div>
+                    </div>
+                    <div>
+                        <label for="nome_acessorio_rfm">Modelo / observacao da fonte</label>
+                        <input
+                            id="nome_acessorio_rfm"
+                            name="nome_acessorio_rfm"
+                            type="text"
+                            value="{{ equipamento.get('nome_acessorio_rfm', '') }}"
+                            placeholder="Ex: Fonte Dell 65W USB-C"
+                        >
+                        <div class="field-hint">Opcional. Use para diferenciar potencia, entrada, USB-C, pino fino etc.</div>
+                    </div>
+                </div>
+            </div>
+        </details>
+
+        <details class="form-section {% if em_estoque %}is-hidden{% endif %}" data-ownership-section {% if inventario_aberto %}open{% endif %}>
+            <summary><span>Uso e responsavel</span></summary>
+            <div class="form-section-body">
+                <div class="grid-3">
+                    <div>
+                        <label for="usuario_final">Usuário Final</label>
+                        <input
+                            id="usuario_final"
+                            name="usuario_final"
+                            type="text"
+                            value="{{ equipamento.get('usuario_final', '') }}"
+                            list="colaboradores-opcoes"
+                            autocomplete="off"
+                            placeholder="Digite ou selecione um colaborador"
+                            data-collaborator-name-input
+                        >
+                        <datalist id="colaboradores-opcoes">
+                            {% for colaborador in colaboradores_opcoes %}
+                            <option
+                                value="{{ colaborador.nome }}"
+                                data-id="{{ colaborador.id }}"
+                                data-email="{{ colaborador.email }}"
+                                data-cpf="{{ colaborador.cpf }}"
+                                data-empresa="{{ colaborador.empresa }}"
+                                data-departamento="{{ colaborador.departamento }}"
+                                data-cargo="{{ colaborador.cargo }}"
+                            >
+                                {{ colaborador.email or colaborador.departamento or colaborador.cargo }}
+                            </option>
+                            {% endfor %}
+                        </datalist>
+                        <input
+                            type="hidden"
+                            name="colaborador_responsavel_id"
+                            value="{{ equipamento.get('colaborador_responsavel_id', '') }}"
+                            data-collaborator-id-input
+                        >
+                        <div class="field-hint">Escolha um colaborador cadastrado para evitar nome digitado errado.</div>
+                    </div>
+                    {{ input_field('email_colaborador', 'E-mail do colaborador', type='email', placeholder='nome@empresa.com.br') }}
+                    <div>
+                        <label for="empresa_colaborador">Empresa do colaborador</label>
+                        <select id="empresa_colaborador" name="empresa_colaborador" data-collaborator-company-field>
+                            <option value="">Nao informado</option>
+                            {% for empresa in empresas_colaborador %}
+                            <option value="{{ empresa }}" {% if equipamento.get('empresa_colaborador') == empresa %}selected{% endif %}>{{ empresa }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="field-hint">Opcional. Use para indicar a empresa do colaborador.</div>
+                    </div>
+                    <div>
+                        <label for="cpf_colaborador">CPF</label>
+                        <input
+                            id="cpf_colaborador"
+                            type="text"
+                            name="cpf_colaborador"
+                            value="{{ equipamento.get('cpf_colaborador', '') }}"
+                            placeholder="000.000.000-00"
+                            inputmode="numeric"
+                            maxlength="14"
+                            autocomplete="off"
+                        >
+                        <div class="field-hint">Opcional. Ajuda no cadastro do colaborador e em termos manuais.</div>
+                    </div>
+                    {{ input_field('setor_usuario', 'Setor / Função', placeholder='Ex: Engenharia, Analista, Consultor') }}
+                    {{ input_field('departamento', 'Departamento') }}
+                    <div class="collaborator-sync-card" data-collaborator-sync-warning hidden>
+                        <strong>Dados diferentes do colaborador cadastrado</strong>
+                        <span>
+                            Ao salvar, o cadastro de <b data-collaborator-sync-name>colaborador</b>
+                            sera atualizado com os dados informados neste equipamento.
+                        </span>
+                        <ul data-collaborator-sync-list></ul>
+                    </div>
+                    <div class="owner-change-date {% if equipamento.get('data_troca_dono') %}is-visible{% endif %}" data-owner-change-date>
+                        <label for="data_troca_dono">Data da troca de dono</label>
+                        <input
+                            id="data_troca_dono"
+                            type="date"
+                            name="data_troca_dono"
+                            value="{{ equipamento.get('data_troca_dono', '') }}"
+                            min="{{ data_minima }}"
+                            max="{{ data_hoje }}"
+                        >
+                    </div>
+                </div>
+            </div>
+        </details>
+
+        <details class="form-section" {% if pagante_aberto %}open{% endif %}>
+            <summary><span>Pagante e NF</span></summary>
+            <div class="form-section-body">
+                <div class="service-form-title">Notebook / equipamento principal</div>
+                <div class="grid-2">
+                    {{ input_field('pagante', 'Pagante', placeholder='Ex: Empresa, cliente, obra ou centro de custo', classes='billing-edit-field') }}
+                    {{ input_field('nota_fiscal_numero', 'Numero NF', placeholder='Ex: 001450745', classes='billing-edit-field') }}
+                    <div class="invoice-upload-card invoice-upload-inline full">
+                        <label for="nota_fiscal_arquivo">Foto/PDF da NF</label>
+                        <input id="nota_fiscal_arquivo" type="file" name="nota_fiscal_arquivo" accept="image/*,.pdf">
+                        <div class="field-hint">Opcional. Anexe o PDF/DANFE quando quiser salvar a foto da nota ou tentar ler Service Tags automaticamente.</div>
+                    </div>
+
+                    {% if nota_fiscal %}
+                    <div class="invoice-link-card full">
+                        <div>
+                            <span>NF vinculada</span>
+                            <strong>{{ nota_fiscal.numero }}</strong>
+                            <small>{{ equipamentos_mesma_nf|length }} equipamento(s) nesta nota</small>
+                        </div>
+                        <div class="invoice-link-actions">
+                            <a class="btn btn-secondary" href="{{ url_for('detalhe_nota_fiscal', invoice_id=nota_fiscal.id) }}">Ver nota</a>
+                            {% if nota_fiscal.file_path %}
+                            <a class="btn btn-outline" href="/{{ nota_fiscal.file_path }}" target="_blank" rel="noopener">Abrir anexo</a>
+                            <button
+                                type="submit"
+                                class="btn btn-danger"
+                                formaction="{{ url_for('deletar_foto_nota_fiscal', invoice_id=nota_fiscal.id) }}"
+                                formmethod="post"
+                                formnovalidate
+                                data-confirm="Remover o anexo desta NF?"
+                            >
+                                Remover anexo
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="service-form-title section-spacer">Monitor</div>
+                <div class="grid-2">
+                    {{ input_field('monitor_pagante', 'Pagante do monitor', placeholder='Ex: Empresa, cliente, obra ou centro de custo', classes='billing-edit-field') }}
+                    {{ input_field('monitor_nota_fiscal_numero', 'Numero NF do monitor', placeholder='Ex: 001450745', classes='billing-edit-field') }}
+                    <div class="invoice-upload-card invoice-upload-inline full">
+                        <label for="monitor_nota_fiscal_arquivo">Foto/PDF da NF do monitor</label>
+                        <input id="monitor_nota_fiscal_arquivo" type="file" name="monitor_nota_fiscal_arquivo" accept="image/*,.pdf">
+                        <div class="field-hint">Opcional. Anexe o PDF/DANFE ou foto da nota fiscal do monitor quando ela for separada da nota do notebook.</div>
+                    </div>
+
+                    {% if monitor_nota_fiscal %}
+                    <div class="invoice-link-card full">
+                        <div>
+                            <span>NF do monitor vinculada</span>
+                            <strong>{{ monitor_nota_fiscal.numero }}</strong>
+                            <small>{{ equipamentos_mesma_nf_monitor|length }} monitor(es) nesta nota</small>
+                        </div>
+                        <div class="invoice-link-actions">
+                            <a class="btn btn-secondary" href="{{ url_for('detalhe_nota_fiscal', invoice_id=monitor_nota_fiscal.id) }}">Ver nota</a>
+                            {% if monitor_nota_fiscal.file_path %}
+                            <a class="btn btn-outline" href="/{{ monitor_nota_fiscal.file_path }}" target="_blank" rel="noopener">Abrir anexo</a>
+                            <button
+                                type="submit"
+                                class="btn btn-danger"
+                                formaction="{{ url_for('deletar_foto_nota_fiscal', invoice_id=monitor_nota_fiscal.id) }}"
+                                formmethod="post"
+                                formnovalidate
+                                data-confirm="Remover o anexo desta NF?"
+                            >
+                                Remover anexo
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </details>
+
+        <details class="form-section {% if not exige_especificacoes %}is-hidden{% endif %}" data-service-section {% if servico_aberto %}open{% endif %}>
+            <summary><span>Serviço e garantia</span></summary>
+            <div class="form-section-body">
+                <div class="service-form-layout">
+                    {% if equipamento_registro %}
+                    {% set tem_ultimo_servico = equipamento_registro.servico_realizado or equipamento_registro.tecnico_formatou or equipamento_registro.data_servico or equipamento_registro.peca_trocada or equipamento_registro.descricao_servico %}
+                    <div class="last-service-card">
+                        <div class="last-service-head">
+                            <span>Último serviço realizado nesta máquina</span>
+                            <strong>{{ equipamento_registro.servico_realizado or 'Nenhum serviço registrado' }}</strong>
+                        </div>
+                        {% if tem_ultimo_servico %}
+                        <div class="last-service-grid">
+                            {% if equipamento_registro.data_servico %}
+                            <div><span>Data</span><strong>{{ equipamento_registro.data_servico.strftime('%d/%m/%Y') }}</strong></div>
+                            {% endif %}
+                            {% if equipamento_registro.tecnico_formatou %}
+                            <div><span>Técnico</span><strong>{{ equipamento_registro.tecnico_formatou }}</strong></div>
+                            {% endif %}
+                            {% if equipamento_registro.peca_trocada %}
+                            <div><span>Item/Software</span><strong>{{ equipamento_registro.peca_trocada }}</strong></div>
+                            {% endif %}
+                        </div>
+                        {% if equipamento_registro.descricao_servico %}
+                        <p>{{ equipamento_registro.descricao_servico }}</p>
+                        {% endif %}
+                        {% else %}
+                        <p>Nenhum serviço foi lançado no histórico desta máquina ainda.</p>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+
+                    <div class="service-form-group">
+                        <div class="service-form-title">Novo serviço</div>
+                        <div class="grid-3">
+                            {{ select_field('servico_realizado', 'Serviço realizado', servicos_realizados, allow_blank=True) }}
+                            {{ input_field('tecnico_formatou', 'Responsável técnico') }}
+                            {{ input_field('data_servico', 'Data do serviço', type='date', min_value=data_minima, max_value=data_hoje) }}
+                        </div>
+                    </div>
+
+                    <div class="service-form-group">
+                        <div class="service-form-title">Garantia Dell</div>
+                        {% if equipamento_registro %}
+                        {% set garantia_atual = warranty_status(equipamento_registro) %}
+                        <div class="warranty-form-card full" data-warranty="{{ garantia_atual.code }}">
+                            <div>
+                                <span class="warranty-pill" data-warranty="{{ garantia_atual.code }}">{{ garantia_atual.label }}</span>
+                                <strong>{{ garantia_atual.date_label }}</strong>
+                            </div>
+                            <p>{{ garantia_atual.description }}</p>
+                            {% if equipamento_registro.garantia_data_compra %}
+                            <small>Data de compra: {{ equipamento_registro.garantia_data_compra.strftime('%d/%m/%Y') }}</small>
+                            {% endif %}
+                            {% if equipamento_registro.garantia_data_renovacao %}
+                            <small>Data de renovação: {{ equipamento_registro.garantia_data_renovacao.strftime('%d/%m/%Y') }}</small>
+                            {% endif %}
+                            {% if equipamento_registro.garantia_extensoes_qtd is not none %}
+                            <small>Garantias estendidas: {{ equipamento_registro.garantia_extensoes_qtd }}</small>
+                            {% endif %}
+                        </div>
+                        {% else %}
+                        <div class="warranty-form-card full" data-warranty="sem_data">
+                            <div>
+                                <span class="warranty-pill" data-warranty="sem_data">Sem consulta</span>
+                                <strong>API Dell</strong>
+                            </div>
+                            <p>A garantia é preenchida pela consulta Dell depois que o equipamento tiver Service Tag salva.</p>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="service-form-group">
+                        <div class="service-form-title">Detalhes do serviço</div>
+                        <div class="grid-2">
+                            {{ input_field('peca_trocada', 'Item/Software alterado', placeholder='Ex: Tela, SSD 512GB, Teclado, Office, VPN', classes='full') }}
+                            {{ textarea_field('descricao_servico', 'Descrição do serviço', placeholder='Ex: Troca de tela feita com teste final aprovado.', classes='full') }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </details>
+
+        <details class="form-section" {% if fotos %}open{% endif %}>
+            <summary>
+                <span>Fotos</span>
+                {% if fotos %}<strong>{{ fotos|length }}</strong>{% endif %}
+            </summary>
+            <div class="form-section-body">
+                <div class="grid">
+                    <div class="full">
+                        <label for="fotos">Adicionar fotos</label>
+                        <input id="fotos" type="file" name="fotos" multiple accept="image/*">
+                        <div class="field-hint">Até 5 imagens por equipamento.</div>
+                        {% if fotos %}
+                        <div class="thumb-grid">
+                            {% for foto in fotos %}
+                                <div class="thumb-card">
+                                    <a class="thumb-image-link" href="/{{ foto.file_path }}" target="_blank" rel="noopener">
+                                        <img src="/{{ foto.file_path }}" alt="Foto do equipamento">
+                                    </a>
+                                    <div class="thumb-actions">
+                                        <button
+                                            type="submit"
+                                            class="btn btn-danger"
+                                            formaction="{{ url_for('deletar_foto', foto_id=foto.id) }}"
+                                            formmethod="post"
+                                            data-confirm="Excluir esta foto?"
+                                        >
+                                            Excluir
+                                        </button>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </details>
+
+        <div class="actions form-actions">
+            <button type="submit" class="btn btn-primary">Salvar equipamento</button>
+            <a href="{{ next_url or url_for('equipamentos') }}" class="btn btn-secondary">Cancelar</a>
+        </div>
+    </form>
+</div>
+
+{% if form_modo == 'editar' and equipamento_id and (current_user.can_delete or current_user.is_admin) %}
+<div class="panel equipment-delete-panel">
+    <div class="delete-panel-main">
+        <div class="delete-panel-copy">
+            <span class="danger-kicker">Exclusao restrita</span>
+            <h2>Remover cadastro do inventario</h2>
+            <p>Area visivel somente para usuarios com permissao de exclusao. Use apenas para testes, duplicidades ou cadastros criados por engano.</p>
+        </div>
+
+        {% if exclusao_equipamento and exclusao_equipamento.bloqueios %}
+        <div class="delete-context is-blocked">
+            <strong>Exclusao bloqueada</strong>
+            <ul>
+                {% for bloqueio in exclusao_equipamento.bloqueios %}
+                <li>{{ bloqueio }}</li>
+                {% endfor %}
+            </ul>
+            <a class="btn btn-secondary" href="{{ url_for('colaboradores', busca=equipamento.get('nome_equipamento_rfm', '')) }}">Abrir colaboradores</a>
+        </div>
+        {% else %}
+        <div class="delete-context">
+            <strong>Antes de excluir</strong>
+            <ul>
+                {% for aviso in exclusao_equipamento.avisos %}
+                <li>{{ aviso }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        <form class="inline-action-form delete-panel-action" method="post" action="{{ url_for('excluir_equipamento', equipamento_id=equipamento_id) }}">
+            {{ csrf_input()|safe }}
+            <input type="hidden" name="next" value="{{ next_url or url_for('equipamentos') }}">
+            <button type="submit" class="btn btn-danger" data-confirm="{{ exclusao_equipamento.confirmacao }}">
+                Excluir cadastro
+            </button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

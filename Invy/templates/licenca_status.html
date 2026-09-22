@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="license-page-shell">
+    <div class="license-page-hero">
+        <div>
+            <span class="license-eyebrow">Sobre</span>
+            <h1>Invy neste computador</h1>
+            <p>{{ resultado.message or 'Acompanhe a licenca, validade, versao instalada e atualizacoes.' }}</p>
+        </div>
+        <div class="license-version-card">
+            <span>Versao instalada</span>
+            <strong>{{ invy_app_version() }}</strong>
+            <span>Status</span>
+            <strong>{{ status_label(resultado.status) }}</strong>
+        </div>
+    </div>
+
+    <div class="license-page-grid">
+        <section class="content-card">
+            <div class="section-title">Licenca</div>
+            {% if resultado.expires_at and resultado.days_remaining is not none and resultado.days_remaining <= 30 %}
+                <div class="license-alert-card {% if resultado.days_remaining < 0 %}danger{% endif %}">
+                    <strong>
+                        {% if resultado.days_remaining < 0 %}
+                            Licenca vencida
+                        {% elif resultado.days_remaining == 0 %}
+                            Licenca vence hoje
+                        {% else %}
+                            Licenca perto do vencimento
+                        {% endif %}
+                    </strong>
+                    <p>
+                        {% if resultado.days_remaining < 0 %}
+                            A validade terminou ha {{ 0 - resultado.days_remaining }} dia(s).
+                        {% elif resultado.days_remaining == 0 %}
+                            A validade termina hoje. Solicite a renovacao para evitar bloqueio.
+                        {% else %}
+                            Restam {{ resultado.days_remaining }} dia(s) de uso.
+                        {% endif %}
+                    </p>
+                </div>
+            {% endif %}
+            <div class="license-info-list">
+                <div>
+                    <span>Cliente</span>
+                    <strong>{{ resultado.client_name or brand.client|default('-') }}</strong>
+                </div>
+                <div>
+                    <span>Validacao</span>
+                    <strong>{{ 'Liberada' if resultado.approved else 'Bloqueada' }}</strong>
+                </div>
+                <div>
+                    <span>Validade da licenca</span>
+                    <strong>
+                        {% if resultado.expires_at %}
+                            {{ resultado.expires_at.strftime('%d/%m/%Y') }}
+                        {% else %}
+                            Sem vencimento
+                        {% endif %}
+                    </strong>
+                </div>
+                <div>
+                    <span>Vida util</span>
+                    <strong>{{ resultado.validity_label or '-' }}</strong>
+                </div>
+                <div>
+                    <span>Plano</span>
+                    <strong>{{ resultado.plan_label or '-' }}</strong>
+                </div>
+                <div>
+                    <span>Ultima validacao</span>
+                    <strong>
+                        {% if resultado.checked_at %}
+                            {{ formatar_horario_br(resultado.checked_at) }}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </strong>
+                </div>
+                <div>
+                    <span>Proxima tentativa</span>
+                    <strong>
+                        {% if resultado.next_check_at %}
+                            {{ formatar_horario_br(resultado.next_check_at) }}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </strong>
+                </div>
+                <div>
+                    <span>Validade offline</span>
+                    <strong>
+                        {% if resultado.grace_until %}
+                            {{ formatar_horario_br(resultado.grace_until) }}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </strong>
+                </div>
+            </div>
+            <div class="license-page-actions">
+                <a class="btn btn-primary" href="{{ url_for('licenca_status', force='1') }}">Validar agora</a>
+                <a class="btn btn-secondary" href="{{ url_for('atualizacao_cliente', force='1') }}">Procurar atualizacao</a>
+            </div>
+        </section>
+
+        <section class="content-card">
+            <div class="section-title">Atualizacao</div>
+            <div class="license-info-list">
+                <div>
+                    <span>Status</span>
+                    <strong>
+                        {% if atualizacao.update_available %}
+                            Disponivel
+                        {% elif atualizacao.ok %}
+                            Atualizado
+                        {% else %}
+                            Indisponivel
+                        {% endif %}
+                    </strong>
+                </div>
+                <div>
+                    <span>Versao liberada</span>
+                    <strong>{{ atualizacao.latest_version or '-' }}</strong>
+                </div>
+                <div>
+                    <span>Tipo</span>
+                    <strong>{{ 'Obrigatoria' if atualizacao.mandatory else 'Opcional' }}</strong>
+                </div>
+            </div>
+            {% if support.phone or support.email %}
+                <div class="license-notes">
+                    <strong>Suporte</strong>
+                    <p>
+                        {% if support.phone %}{{ support.phone }}{% endif %}
+                        {% if support.phone and support.email %} / {% endif %}
+                        {% if support.email %}{{ support.email }}{% endif %}
+                    </p>
+                </div>
+            {% endif %}
+        </section>
+    </div>
+</section>
+{% endblock %}

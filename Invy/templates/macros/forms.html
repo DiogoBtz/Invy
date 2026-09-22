@@ -1,0 +1,42 @@
+{# Macros reutilizaveis para formularios Jinja. #}
+
+{% macro required_marker(required) -%}
+    {% if required %}<span class="required-marker" aria-hidden="true">*</span>{% endif %}
+{%- endmacro %}
+
+{% macro input_field(name, label, type="text", required=False, placeholder="", min_value="", max_value="", classes="") -%}
+<div{% if classes %} class="{{ classes }}"{% endif %}>
+    <label for="{{ name }}">{{ label }}{{ required_marker(required) }}</label>
+    <input
+        id="{{ name }}"
+        type="{{ type }}"
+        name="{{ name }}"
+        value="{{ equipamento.get(name, '') }}"
+        {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}
+        {% if required %}required{% endif %}
+        {% if min_value %}min="{{ min_value }}"{% endif %}
+        {% if max_value %}max="{{ max_value }}"{% endif %}
+    >
+</div>
+{%- endmacro %}
+
+{% macro select_field(name, label, options, required=False, allow_blank=False, blank_label="Selecione", classes="") -%}
+<div{% if classes %} class="{{ classes }}"{% endif %}>
+    <label for="{{ name }}">{{ label }}{{ required_marker(required) }}</label>
+    <select id="{{ name }}" name="{{ name }}" {% if required %}required{% endif %}>
+        {% if allow_blank %}
+        <option value="" {% if not equipamento.get(name) %}selected{% endif %}>{{ blank_label }}</option>
+        {% endif %}
+        {% for item in options %}
+        <option value="{{ item }}" {% if equipamento.get(name) == item %}selected{% endif %}>{{ item }}</option>
+        {% endfor %}
+    </select>
+</div>
+{%- endmacro %}
+
+{% macro textarea_field(name, label, placeholder="", classes="") -%}
+<div{% if classes %} class="{{ classes }}"{% endif %}>
+    <label for="{{ name }}">{{ label }}</label>
+    <textarea id="{{ name }}" name="{{ name }}" {% if placeholder %}placeholder="{{ placeholder }}"{% endif %}>{{ equipamento.get(name, '') }}</textarea>
+</div>
+{%- endmacro %}

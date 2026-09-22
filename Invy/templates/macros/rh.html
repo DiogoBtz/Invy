@@ -1,0 +1,117 @@
+{% macro rh_request_queue(cadastros, heading, note, panel_id='', cta_url='', cta_label='Abrir fila completa', compact=False, total=None, return_status='open') %}
+{% set total_chamados = total if total is not none else cadastros|length %}
+<div class="panel rh-request-panel section-spacer" {% if panel_id %}id="{{ panel_id }}"{% endif %}>
+    <div class="rh-request-head">
+        <div>
+            <span class="rh-request-kicker"><i aria-hidden="true"></i>Chamados RH</span>
+            <div class="section-title">{{ heading }}</div>
+            <div class="section-note">{{ note }}</div>
+        </div>
+        <div class="rh-request-head-actions">
+            <div class="rh-request-count" aria-label="{{ total_chamados }} chamado(s)">
+                <strong>{{ total_chamados }}</strong>
+                <span>chamado(s)</span>
+            </div>
+            {% if cta_url %}
+            <a class="btn btn-secondary" href="{{ cta_url }}">{{ cta_label }}</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="rh-request-grid {% if compact %}rh-request-grid-compact{% endif %}">
+        {% for colaborador in cadastros %}
+        {% set status_key = colaborador.rh_status_effective|default(colaborador.rh_status or ('approved' if colaborador.admin_reviewed_at else 'pending'), true) %}
+        {% set status_label = colaborador.rh_status_label|default('Aberto pelo RH', true) %}
+        {% set status_tone = colaborador.rh_status_tone|default('conferir', true) %}
+        <article class="rh-request-card">
+            <div class="rh-request-main">
+                <span class="rh-request-avatar" aria-hidden="true">{{ (colaborador.display_name or 'R')[:1] }}</span>
+                <div class="rh-request-copy">
+                    <div class="rh-request-title-row">
+                        <strong>{{ colaborador.display_name }}</strong>
+                        <span class="status-pill" data-status="{{ status_tone }}">{{ colaborador.rh_status_label|default(status_label, true) }}</span>
+                    </div>
+                    <span>{{ colaborador.mail or colaborador.user_principal_name or 'Sem e-mail' }}</span>
+                    {% if colaborador.rh_status_note %}
+                    <small class="rh-request-note">{{ colaborador.rh_status_note }}</small>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="rh-request-meta">
+                <span>
+                    <small>Empresa</small>
+                    {{ colaborador.empresa_colaborador or 'Nao informada' }}
+                </span>
+                <span>
+                    <small>Departamento</small>
+                    {{ colaborador.department or 'Nao informado' }}
+                </span>
+                <span>
+                    <small>Criado</small>
+                    {{ formatar_horario_br(colaborador.created_at) if colaborador.created_at else '-' }}
+                </span>
+            </div>
+
+            <div class="rh-request-flow">
+                <span class="{% if status_key in ['pending', 'in_review', 'preparing_notebook', 'notebook_ready', 'term_sent', 'completed', 'approved'] %}is-active{% endif %}">RH abriu</span>
+                <span class="{% if status_key in ['preparing_notebook', 'notebook_ready', 'term_sent', 'completed', 'approved'] %}is-active{% endif %}">Separando</span>
+                <span class="{% if status_key in ['notebook_ready', 'term_sent', 'completed', 'approved'] %}is-active{% endif %}">Pronto</span>
+                <span class="{% if colaborador.rh_term_sent or status_key in ['term_sent', 'completed', 'approved'] %}is-active{% endif %}">Termo</span>
+                <span class="{% if colaborador.rh_term_signed or status_key in ['completed', 'approved'] %}is-active{% endif %}">Assinado</span>
+            </div>
+
+            <div class="rh-request-actions">
+                {% if current_user.is_admin or current_user.can_edit %}
+                <a class="btn btn-secondary btn-sm" href="{{ url_for('colaboradores', busca=colaborador.display_name, colaborador=colaborador.display_name) }}#vincular-etiqueta">Editar e vincular</a>
+                {% else %}
+                <a class="btn btn-secondary btn-sm" href="{{ url_for('colaboradores', busca=colaborador.display_name, colaborador=colaborador.display_name) }}">Abrir cadastro</a>
+                {% endif %}
+                {% if current_user.is_rh and colaborador.rh_can_send_term %}
+                <a class="btn btn-primary btn-sm" href="{{ url_for('colaboradores', busca=colaborador.display_name, colaborador=colaborador.display_name) }}#termo-responsabilidade">Enviar termo</a>
+                {% endif %}
+                {% if current_user.is_rh and colaborador.rh_can_finish %}
+                <form class="inline-action-form" method="post" action="{{ url_for('atualizar_status_cadastro_rh', colaborador_id=colaborador.id) }}">
+                    {{ csrf_input()|safe }}
+                    <input type="hidden" name="return_status" value="{{ return_status }}">
+                    <input type="hidden" name="rh_status" value="completed">
+                    <input type="hidden" name="rh_status_note" value="Termo assinado. Notebook retirado pelo RH.">
+                    <button class="btn btn-primary btn-sm" type="submit" data-confirm="Finalizar este chamado RH?">Finalizar chamado</button>
+                </form>
+                {% endif %}
+                {% if current_user.is_admin and status_key not in ['notebook_ready', 'term_sent', 'completed', 'approved', 'canceled'] %}
+                <form class="inline-action-form" method="post" action="{{ url_for('revisar_cadastro_rh', colaborador_id=colaborador.id) }}">
+                    {{ csrf_input()|safe }}
+                    <button class="btn btn-primary btn-sm" type="submit" data-confirm="Marcar este chamado como Notebook Pronto?">Notebook pronto</button>
+                </form>
+                {% endif %}
+            </div>
+
+            {% if (current_user.can_see_rh_requests or current_user.can_edit or current_user.is_admin) and not current_user.is_rh and status_key not in ['completed', 'approved', 'canceled'] %}
+            <form class="rh-request-status-form" method="post" action="{{ url_for('atualizar_status_cadastro_rh', colaborador_id=colaborador.id) }}">
+                {{ csrf_input()|safe }}
+                <input type="hidden" name="return_status" value="{{ return_status }}">
+                <select name="rh_status">
+                    <option value="in_review" {% if status_key == 'in_review' %}selected{% endif %}>Verificando dados</option>
+                    <option value="preparing_notebook" {% if status_key == 'preparing_notebook' %}selected{% endif %}>Separando Notebook</option>
+                    <option value="notebook_ready" {% if status_key == 'notebook_ready' %}selected{% endif %}>Notebook Pronto</option>
+                    <option value="needs_correction" {% if status_key == 'needs_correction' %}selected{% endif %}>Precisa corrigir</option>
+                    <option value="canceled">Cancelado</option>
+                </select>
+                <textarea name="rh_status_note" rows="2" placeholder="Observacao para o RH">{{ colaborador.rh_status_note or '' }}</textarea>
+                <button class="btn btn-outline btn-sm" type="submit">Atualizar chamado</button>
+            </form>
+            {% elif current_user.is_rh and status_key == 'needs_correction' %}
+            <form class="rh-request-status-form" method="post" action="{{ url_for('atualizar_status_cadastro_rh', colaborador_id=colaborador.id) }}">
+                {{ csrf_input()|safe }}
+                <input type="hidden" name="return_status" value="open">
+                <input type="hidden" name="rh_status" value="pending">
+                <textarea name="rh_status_note" rows="2" placeholder="Observacao da correcao"></textarea>
+                <button class="btn btn-primary btn-sm" type="submit">Reenviar ao TI</button>
+            </form>
+            {% endif %}
+        </article>
+        {% endfor %}
+    </div>
+</div>
+{% endmacro %}

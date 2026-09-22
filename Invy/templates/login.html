@@ -1,0 +1,121 @@
+﻿{# Login tem layout proprio para nao carregar a sidebar antes da autenticacao. #}
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ page_title or ('Login - ' ~ (brand.name|default('Invy'))) }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='invy-login-logo-hq-20260922') }}">
+</head>
+
+{% set brand_name = brand.name|default('Invy') %}
+{% set brand_client = brand.client|default('Sua empresa', true) %}
+{% set brand_product = brand.product|default('Inventario de TI') %}
+{% set brand_tagline = brand.tagline|default('Inventario, garantias e notas fiscais em uma rotina so.') %}
+{% set brand_logo = brand.logo_path|default('images/invy-logo.png', true) %}
+{% set brand_logo_login = 'images/invy-logo-login-transparent-2x.png' %}
+
+<body
+    class="login-page login-v2-page"
+    style="--login-accent: {{ brand.accent|default('#2563eb') }}; --login-accent-alt: {{ brand.accent_alt|default('#14b8a6') }}; --app-brand-accent: {{ brand.accent|default('#2563eb') }}; --app-brand-accent-alt: {{ brand.accent_alt|default('#14b8a6') }};"
+>
+
+{% include "_flash_messages.html" %}
+
+<main class="login-v2-shell">
+    <section class="login-v2-visual" aria-label="{{ brand_product }} {{ brand_client }}">
+        <div class="login-v2-brand">
+            <div class="login-brand-copy">
+                <strong>{{ brand_name }}</strong>
+                <small>{{ brand_product }} para {{ brand_client }}</small>
+            </div>
+        </div>
+
+        <div class="login-logo-hero" aria-hidden="true">
+            <img src="{{ url_for('static', filename=brand_logo_login) }}" alt="">
+        </div>
+    </section>
+
+    <section class="login-v2-panel" aria-labelledby="login-title">
+        <div class="login-panel-brand" aria-hidden="true">
+            <span class="login-panel-logo-card">
+                <img src="{{ url_for('static', filename=brand_logo) }}" alt="">
+            </span>
+            <div>
+                <strong>{{ brand_name }}</strong>
+                <small>{{ brand_product }} para {{ brand_client }}</small>
+            </div>
+        </div>
+
+        <div class="login-partners" aria-label="Integrações e parcerias">
+            <span class="login-partners-kicker">Integrações e parcerias</span>
+            <div class="login-partners-grid">
+                <div class="login-partner-card login-partner-card-acronis">
+                    <img src="{{ url_for('static', filename='images/acronis/acronis.png') }}" alt="Acronis Cyber Protect">
+                </div>
+                <div class="login-partner-card login-partner-card-graph">
+                    <img src="{{ url_for('static', filename='images/partners/microsoft-graph.png') }}" alt="Microsoft Graph">
+                </div>
+                <div class="login-partner-card login-partner-card-docusign">
+                    <img src="{{ url_for('static', filename='images/partners/docusign.png') }}" alt="DocuSign">
+                </div>
+                <div class="login-partner-card login-partner-card-dell">
+                    <img src="{{ url_for('static', filename='images/partners/dell.jpg') }}" alt="Dell">
+                </div>
+            </div>
+        </div>
+
+        <div class="login-v2-heading">
+            <span class="login-v2-kicker">{{ brand_client }} / Acesso seguro</span>
+            <h1 id="login-title">Acesse o {{ brand_name }}</h1>
+            <p>Entre para consultar equipamentos, garantias, notas fiscais e detalhes do inventario.</p>
+        </div>
+
+        <form method="post" class="login-v2-form">
+            {{ csrf_input()|safe }}
+
+            <div class="login-v2-field">
+                <label for="username">Usuario</label>
+                <div class="login-v2-input">
+                    <input
+                        type="text"
+                        id="username"
+                        name="username"
+                        placeholder="Ex: admin"
+                        autocomplete="username"
+                        autofocus
+                        required
+                    >
+                </div>
+            </div>
+
+            <div class="login-v2-field">
+                <label for="password">Senha</label>
+                <div class="login-v2-input">
+                    <input
+                        type="password"
+                        id="password"
+                        name="password"
+                        placeholder="Digite sua senha"
+                        autocomplete="current-password"
+                        required
+                    >
+                </div>
+            </div>
+
+            <button type="submit" class="login-v2-submit">
+                <span>Entrar</span>
+            </button>
+        </form>
+
+        <footer class="login-v2-panel-footer">
+            <span>{{ brand_product }} - {{ brand_client }}</span>
+        </footer>
+    </section>
+</main>
+
+<script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/login.js') }}" defer></script>
+
+</body>
+</html>

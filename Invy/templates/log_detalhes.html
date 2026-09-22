@@ -1,0 +1,66 @@
+﻿{# Detalhes de auditoria: mostra dados gerais e alteracoes campo a campo. #}
+{% extends "base.html" %}
+{% block content %}
+
+<div class="topbar logs-topbar">
+    <div>
+        <h1>Detalhes da Auditoria</h1>
+        <div class="subtitle">{{ log.action_label }} em {{ formatar_horario_br(log.created_at) }}</div>
+    </div>
+    <a class="btn btn-outline" href="{{ url_for('logs') }}">Voltar</a>
+</div>
+
+<div class="panel log-detail-panel">
+    <div class="audit-detail-head">
+        <span class="log-action-pill action-{{ log.action_tone }}">{{ log.action_label }}</span>
+        <strong>{{ log.entity_label }}</strong>
+        <span>{{ log.username }}</span>
+    </div>
+    <div class="grid-3 log-detail-grid section-spacer">
+        <div><label>Data/Hora</label><input type="text" value="{{ formatar_horario_br(log.created_at) }}" readonly></div>
+        <div><label>Usuario do sistema</label><input type="text" value="{{ log.username }}" readonly></div>
+        <div><label>Acao tecnica</label><input type="text" value="{{ log.action }}" readonly></div>
+        <div><label>Tipo</label><input type="text" value="{{ log.entity_label }}" readonly></div>
+        <div><label>Patrimonio</label><input type="text" value="{{ audit_log_rfm_tag(log) }}" readonly></div>
+        <div><label>Service Tag</label><input type="text" value="{{ log.service_tag or '-' }}" readonly></div>
+        <div class="full"><label>Resumo</label><textarea readonly rows="3">{{ log.details or '-' }}</textarea></div>
+    </div>
+</div>
+
+<div class="panel section-spacer log-detail-panel">
+    <div class="section-title">Antes e depois</div>
+    <div class="section-note">Aqui aparece exatamente o que mudou neste evento. Em exclusoes, o valor deletado aparece em Antes e o Depois fica vazio.</div>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>Campo</th><th>Antes</th><th>Depois</th></tr></thead>
+            <tbody>
+                {% for change in log.changes %}
+                <tr>
+                    <td data-label="Campo"><strong>{{ change.field_label }}</strong><span class="table-subline">{{ change.field_name }}</span></td>
+                    <td data-label="Antes">{{ change.old_display }}</td>
+                    <td data-label="Depois">{{ change.new_display }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="3">Este log antigo nao possui campos detalhados. Consulte o resumo do evento acima.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% if relacionados %}
+<div class="panel section-spacer log-detail-panel">
+    <div class="section-title">Eventos relacionados</div>
+    <div class="audit-related-list">
+        {% for item in relacionados %}
+        <a href="{{ url_for('log_detalhes', log_id=item.id) }}">
+            <span class="log-action-pill action-{{ item.action_tone }}">{{ item.action_label }}</span>
+            <strong>{{ formatar_horario_br(item.created_at) }}</strong>
+            <small>{{ item.details or item.entity_label }}</small>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

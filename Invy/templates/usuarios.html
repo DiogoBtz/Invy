@@ -1,0 +1,149 @@
+{# Usuarios: area administrativa para criar contas e ajustar permissoes. #}
+{% extends "base.html" %}
+{% block content %}
+
+<div class="topbar">
+    <div>
+        <h1>Usuarios</h1>
+        <div class="subtitle">Gerencie acessos internos do sistema</div>
+    </div>
+</div>
+
+<div class="stats">
+    <div class="stat-box"><h3>{{ resumo.total }}</h3><p>Usuarios</p></div>
+    <div class="stat-box"><h3>{{ resumo.admins }}</h3><p>Administradores</p></div>
+    <div class="stat-box"><h3>{{ resumo.rh }}</h3><p>Perfil RH</p></div>
+    <div class="stat-box"><h3>{{ resumo.chamados_rh }}</h3><p>Chamados RH</p></div>
+    <div class="stat-box"><h3>{{ resumo.podem_criar }}</h3><p>Podem criar</p></div>
+    <div class="stat-box"><h3>{{ resumo.podem_excluir }}</h3><p>Podem excluir</p></div>
+</div>
+
+<div class="panel user-list-panel">
+    <div class="section-title">Usuarios cadastrados</div>
+    <div class="section-note">Contas que podem acessar o Invy e suas permissoes atuais.</div>
+    <div class="table-wrap">
+        <table class="user-list-table">
+            <thead>
+                <tr>
+                    <th>Nome</th>
+                    <th>Login</th>
+                    <th>E-mail</th>
+                    <th>Perfil</th>
+                    <th>Status</th>
+                    <th>Permissoes</th>
+                    <th>Contexto</th>
+                    <th>Criado em</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in usuarios %}
+                {% set is_master = item.username|lower == admin_username %}
+                <tr>
+                    <td data-label="Nome">
+                        <strong>{{ item.full_name }}</strong>
+                        {% if is_master %}<small>Conta master</small>{% endif %}
+                    </td>
+                    <td data-label="Login">{{ item.username }}</td>
+                    <td data-label="E-mail">{{ item.email or '-' }}</td>
+                    <td data-label="Perfil"><span class="badge">{{ item.profile_label }}</span></td>
+                    <td data-label="Status">
+                        <span class="status-pill" data-status="{{ 'sim' if item.active else 'nao' }}">
+                            {{ 'Ativo' if item.active else 'Inativo' }}
+                        </span>
+                    </td>
+                    <td data-label="Permissoes">
+                        <div class="user-permission-list">
+                            {% if item.can_view %}<span class="badge">Ver</span>{% endif %}
+                            {% if item.can_create %}<span class="badge">Criar</span>{% endif %}
+                            {% if item.can_edit %}<span class="badge">Editar</span>{% endif %}
+                            {% if item.can_delete %}<span class="badge">Excluir</span>{% endif %}
+                            {% if item.can_see_rh_requests %}<span class="badge">RH</span>{% endif %}
+                            {% if not item.can_view and not item.can_create and not item.can_edit and not item.can_delete and not item.can_see_rh_requests %}
+                            <span class="muted">Sem permissoes</span>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td data-label="Contexto">
+                        <div class="user-context-cell">
+                            <strong>{{ item.department or '-' }}</strong>
+                            <small>{{ item.job_title or item.unit_name or item.site_name or item.project_name or '' }}</small>
+                        </div>
+                    </td>
+                    <td data-label="Criado em">{{ formatar_horario_br(item.created_at) if item.created_at else '-' }}</td>
+                    <td data-label="Ações">
+                        <div class="user-action-row">
+                            <a class="btn btn-secondary btn-compact" href="{{ url_for('editar_usuario', user_id=item.id) }}">Editar</a>
+                            {% if item.id != current_user.id and not is_master %}
+                            <form class="inline-action-form" method="post" action="{{ url_for('alternar_status_usuario', user_id=item.id) }}">
+                                {{ csrf_input()|safe }}
+                                <input type="hidden" name="active" value="{{ '0' if item.active else '1' }}">
+                                <button class="btn btn-outline btn-compact" type="submit">
+                                    {{ 'Desativar' if item.active else 'Ativar' }}
+                                </button>
+                            </form>
+                            <form class="inline-action-form" method="post" action="{{ url_for('excluir_usuario', user_id=item.id) }}">
+                                {{ csrf_input()|safe }}
+                                <button class="btn btn-danger btn-compact" type="submit" data-confirm="Excluir este usuario do Invy?">Excluir</button>
+                            </form>
+                            {% else %}
+                            <span class="muted">Protegido</span>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="9">Nenhum usuario cadastrado.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{# Criacao de administradores exige codigo master para reduzir risco operacional. #}
+<div class="panel section-spacer">
+    <div class="section-title">Novo usuario</div>
+    <div class="security-callout">
+        <strong>Protecao de conta master</strong>
+        <span>
+            Para criar outro administrador, informe o codigo master configurado no servidor.
+            {% if not master_admin_code_configurado %}
+            No momento, novas contas master estao bloqueadas ate configurar <code>MASTER_ADMIN_CODE</code>.
+            {% endif %}
+        </span>
+    </div>
+    <form method="post">
+        {{ csrf_input()|safe }}
+        <div class="grid">
+            <div><label>Nome completo</label><input type="text" name="full_name" required></div>
+            <div><label>Usuario</label><input type="text" name="username" required></div>
+            <div>
+                <label>E-mail corporativo</label>
+                <input type="email" name="email" placeholder="nome@empresa.com.br" required>
+                <div class="field-hint">Politica atual: {{ email_policy_label or 'qualquer e-mail valido' }}.</div>
+            </div>
+            <div><label>Senha</label><input type="password" name="password" minlength="12" autocomplete="new-password" required></div>
+        </div>
+        <div class="grid-3 section-spacer">
+            <div><label>Perfil</label><select name="profile"><option value="operador">Operador</option><option value="rh">RH</option></select></div>
+            <div><label>Administrador</label><select name="is_admin"><option value="0">Nao</option><option value="1">Sim</option></select></div>
+            <div><label>Pode visualizar</label><select name="can_view"><option value="1">Sim</option><option value="0">Nao</option></select></div>
+        </div>
+        <div class="grid-3 section-spacer">
+            <div><label>Pode criar</label><select name="can_create"><option value="0">Nao</option><option value="1">Sim</option></select></div>
+            <div><label>Pode editar</label><select name="can_edit"><option value="0">Nao</option><option value="1">Sim</option></select></div>
+            <div><label>Pode excluir</label><select name="can_delete"><option value="0">Nao</option><option value="1">Sim</option></select></div>
+        </div>
+        <div class="grid-3 section-spacer">
+            <div><label>Visualizar chamado RH</label><select name="can_view_rh_requests"><option value="0">Nao</option><option value="1">Sim</option></select></div>
+            <div class="master-code-field">
+                <label>Codigo master</label>
+                <input type="password" name="master_admin_code" autocomplete="off" placeholder="Obrigatorio para administrador">
+                <div class="field-hint">O codigo fica somente no <code>.env</code> do servidor.</div>
+            </div>
+        </div>
+        <div class="actions"><button type="submit" class="btn btn-primary">Criar usuario</button></div>
+    </form>
+</div>
+
+{% endblock %}

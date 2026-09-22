@@ -1,0 +1,54 @@
+{# Layout base das telas internas: head, sidebar, workspace bar e scripts globais. #}
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ page_title or ((brand.name|default('Invy')) ~ ' - ' ~ (brand.product|default('Inventario de TI'))) }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='workspace-search-clean-20260825') }}">
+</head>
+
+<body
+    class="{% if hide_layout %}login-page-body{% else %}app-body page-{{ active_page|default('app') }}{% endif %}"
+    style="--app-brand-accent: {{ brand.accent|default('#2563eb') }}; --app-brand-accent-alt: {{ brand.accent_alt|default('#14b8a6') }};"
+>
+    {% include "_flash_messages.html" %}
+
+    {% if hide_layout %}
+        <div class="login-page">
+            <div class="login-card">
+                {{ content|safe }}
+            </div>
+        </div>
+    {% else %}
+        <div class="layout">
+            <button
+                type="button"
+                class="sidebar-shell-toggle"
+                data-sidebar-toggle
+                aria-expanded="true"
+                aria-controls="app-sidebar"
+                aria-label="Esconder menu lateral"
+                title="Esconder menu lateral"
+            >
+                <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="m15 18-6-6 6-6"></path>
+                </svg>
+            </button>
+
+            {% include "partials/_sidebar.html" %}
+
+            <main class="content">
+                {% include "partials/_workspace_bar.html" %}
+
+                {% block content %}
+                    {{ content|safe }}
+                {% endblock %}
+            </main>
+        </div>
+    {% endif %}
+
+    <script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

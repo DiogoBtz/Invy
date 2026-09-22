@@ -1,0 +1,83 @@
+﻿{# Busca rapida: retorna correspondencia exata e ate 12 resultados relacionados. #}
+{% extends "base.html" %}
+{% from "macros/equipment.html" import result_card with context %}
+
+{% block content %}
+
+<div class="topbar">
+    <div>
+        <h1>Consulta de equipamento</h1>
+        <div class="subtitle">Localize uma maquina pelo patrimonio, Service Tag, usuario, pagante ou setor.</div>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary" href="{{ url_for('equipamentos') }}">Abrir Inventario</a>
+    </div>
+</div>
+
+{# Form GET mantem o termo na URL para facilitar compartilhamento/suporte. #}
+<div class="panel quick-search-panel">
+    <form class="quick-search-form" method="get">
+        <input
+            type="text"
+            name="busca"
+            placeholder="Digite a Patrimonio, Service Tag Dell, acessorio, usuario, pagante, departamento, setor/funcao ou peca"
+            value="{{ busca }}"
+            autofocus
+        >
+        <button type="submit" class="btn btn-primary">Buscar</button>
+        {% if busca %}
+        <a href="{{ url_for('buscar') }}" class="btn btn-secondary">Limpar</a>
+        {% endif %}
+    </form>
+
+    <div class="muted">
+        A consulta mostra ate 12 resultados relacionados. Para filtros por status, departamento, setor/funcao, datas e ordenacao, use o Inventario.
+    </div>
+</div>
+
+{% if busca %}
+<div class="stats section-spacer">
+    <div class="stat-box"><h3>{{ total_resultados }}</h3><p>Resultado(s)</p></div>
+    <div class="stat-box"><h3>{{ 1 if resultado_principal else 0 }}</h3><p>Correspondencia exata</p></div>
+    <div class="stat-box"><h3>{{ equipamentos|length }}</h3><p>Relacionados</p></div>
+    <div class="stat-box"><h3>{{ busca|length }}</h3><p>Caracteres buscados</p></div>
+</div>
+{% endif %}
+
+{% if nota_fiscal_resultado %}
+<div class="panel section-spacer invoice-search-panel">
+    <div class="section-title">Nota fiscal encontrada</div>
+    <div class="result-grid">
+        <div><span>Numero NF</span><strong>{{ nota_fiscal_resultado.numero }}</strong></div>
+        <div><span>Equipamentos vinculados</span><strong>{{ nota_fiscal_resultado.total_equipamentos_vinculados }}</strong></div>
+        <div><span>Anexo</span><strong>{{ 'Sim' if nota_fiscal_resultado.file_path else 'Nao' }}</strong></div>
+    </div>
+    <div class="actions">
+        <a class="btn btn-primary" href="{{ url_for('detalhe_nota_fiscal', invoice_id=nota_fiscal_resultado.id) }}">Abrir nota</a>
+        {% if nota_fiscal_resultado.file_path %}
+        <a class="btn btn-secondary" href="/{{ nota_fiscal_resultado.file_path }}" target="_blank" rel="noopener">Abrir anexo</a>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{% if resultado_principal %}
+<div class="section-spacer">
+    {{ result_card(resultado_principal, True) }}
+</div>
+{% endif %}
+
+{% if equipamentos %}
+<div class="result-list section-spacer">
+    {% for eq in equipamentos %}
+    {{ result_card(eq) }}
+    {% endfor %}
+</div>
+{% elif busca and not resultado_principal %}
+<div class="panel section-spacer">
+    <div class="section-title">Nenhum equipamento encontrado</div>
+    <div class="muted">Confira se a Patrimonio ou Nome foi digitada corretamente.</div>
+</div>
+{% endif %}
+
+{% endblock %}

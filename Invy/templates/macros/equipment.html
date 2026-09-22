@@ -1,0 +1,71 @@
+{# Componentes visuais reutilizaveis para equipamentos. #}
+
+{% macro result_card(eq, destaque=False) %}
+{% set garantia = warranty_status(eq) %}
+<article class="equipment-result-card {% if destaque %}is-primary{% endif %}">
+    <div class="equipment-result-head">
+        <div>
+            <span class="result-kicker">{% if destaque %}Correspondencia exata{% else %}Resultado relacionado{% endif %}</span>
+            <h2>{{ eq.patrimonio or '-' }}</h2>
+            <p>{{ eq.nome_equipamento_rfm }}</p>
+        </div>
+        <div class="result-status-stack">
+            <span class="status-pill" data-status="{{ eq.status_equipamento|lower }}">{{ eq.status_equipamento }}</span>
+            <span class="warranty-pill" data-warranty="{{ garantia.code }}">{{ garantia.label }}</span>
+        </div>
+    </div>
+
+    <div class="warranty-summary" data-warranty="{{ garantia.code }}">
+        <div>
+            <span>Garantia Dell</span>
+            <strong>{{ garantia.date_label }}</strong>
+        </div>
+        <p>{{ garantia.description }}</p>
+    </div>
+
+    <div class="result-grid">
+        <div><span>Service Tag Dell</span><strong class="service-code">{{ eq.service_tag or '-' }}</strong></div>
+        <div><span>Tipo</span><strong>{{ eq.tipo_equipamento }}</strong></div>
+        <div><span>Usuario</span><strong>{{ eq.usuario_final or '-' }}</strong></div>
+        <div><span>Empresa</span><strong>{{ eq.empresa_colaborador or '-' }}</strong></div>
+        <div>
+            <span>Pagante</span>
+            <strong>{{ eq.pagante or '-' }}</strong>
+            {% if eq.monitor_pagante %}<small>Monitor: {{ eq.monitor_pagante }}</small>{% endif %}
+        </div>
+        <div>
+            <span>Numero NF</span>
+            <strong>
+                {% if eq.invoice %}
+                <a href="{{ url_for('detalhe_nota_fiscal', invoice_id=eq.invoice.id) }}">{{ eq.invoice.numero }}</a>
+                {% else %}
+                -
+                {% endif %}
+            </strong>
+            {% if eq.monitor_invoice %}
+            <small>Monitor: <a href="{{ url_for('detalhe_nota_fiscal', invoice_id=eq.monitor_invoice.id) }}">{{ eq.monitor_invoice.numero }}</a></small>
+            {% endif %}
+        </div>
+        <div><span>Setor/Funcao</span><strong>{{ eq.setor_usuario or '-' }}</strong></div>
+        <div><span>Departamento</span><strong>{{ eq.departamento or '-' }}</strong></div>
+        <div><span>Ultimo servico</span><strong>{{ eq.servico_realizado or '-' }}</strong></div>
+        <div><span>Item/Software</span><strong>{{ eq.peca_trocada or '-' }}</strong></div>
+        <div><span>Origem garantia</span><strong>{{ eq.garantia_origem or 'Manual' }}</strong></div>
+    </div>
+
+    <div class="result-actions">
+        <a class="btn btn-secondary" href="{{ url_for('historico_service_tag', equipamento_id=eq.id) }}">Detalhes</a>
+        {% if current_user.is_admin or current_user.can_edit %}
+        <a class="btn btn-primary" href="{{ url_for('editar_equipamento', equipamento_id=eq.id) }}">Editar</a>
+        {% endif %}
+    </div>
+
+    {% if eq.fotos %}
+    <div class="result-photo-strip">
+        {% for foto in eq.fotos[:3] %}
+        <img src="/{{ foto.file_path }}" alt="Foto do equipamento">
+        {% endfor %}
+    </div>
+    {% endif %}
+</article>
+{% endmacro %}

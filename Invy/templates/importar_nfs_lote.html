@@ -1,0 +1,274 @@
+{# Importacao em lote de DANFEs/PDFs de nota fiscal. #}
+{% extends "base.html" %}
+
+{% block content %}
+<div class="topbar">
+    <div>
+        <h1>Importar DANFEs em lote</h1>
+        <div class="subtitle">Leia PDFs individuais ou uma pasta inteira, revise os dados e importe somente NFs novas</div>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary" href="{{ url_for('notas_fiscais') }}">Voltar</a>
+    </div>
+</div>
+
+<div class="panel form-panel equipment-form-panel invoice-import-panel">
+    <form class="equipment-form" method="post" enctype="multipart/form-data" action="{{ url_for('importar_lote_notas_fiscais') }}" data-bulk-invoice-upload>
+        {{ csrf_input()|safe }}
+
+        <div class="invoice-import-head">
+            <div>
+                <div class="section-title">Leitura de PDF/DANFE</div>
+                <div class="section-note">Escolha o modo, envie os arquivos e confira a previa antes de gravar no inventario.</div>
+            </div>
+
+            <div class="invoice-import-mode" role="radiogroup" aria-label="Modo de leitura">
+                <label class="invoice-import-mode-option is-active">
+                    <input type="radio" name="upload_source" value="files" checked data-bulk-upload-mode>
+                    <span>PDF individual</span>
+                    <small>Uma NF ou varios PDFs soltos</small>
+                </label>
+                <label class="invoice-import-mode-option">
+                    <input type="radio" name="upload_source" value="folder" data-bulk-upload-mode>
+                    <span>Pasta</span>
+                    <small>Ler todos os PDFs de uma pasta</small>
+                </label>
+            </div>
+        </div>
+
+        <div class="invoice-upload-grid">
+            <div class="invoice-upload-dropzone is-active" data-bulk-upload-pane="files">
+                <div>
+                    <label for="danfes_arquivos">Selecionar PDFs</label>
+                    <div class="field-hint">Para notas em Downloads ou arquivos soltos em qualquer pasta.</div>
+                </div>
+                <input id="danfes_arquivos" name="danfes" type="file" accept=".pdf,application/pdf" multiple data-bulk-upload-input>
+            </div>
+
+            <div class="invoice-upload-dropzone" data-bulk-upload-pane="folder" hidden>
+                <div>
+                    <label for="danfes_pasta">Selecionar pasta</label>
+                    <div class="field-hint">Para uma pasta com varias DANFEs/PDFs; arquivos sem PDF sao ignorados.</div>
+                </div>
+                <input id="danfes_pasta" name="danfes" type="file" accept=".pdf,application/pdf" multiple webkitdirectory directory disabled data-bulk-upload-input>
+            </div>
+
+            <div class="invoice-upload-summary" data-bulk-upload-summary aria-live="polite">
+                <strong>Nenhum PDF selecionado</strong>
+                <small>A analise cria apenas uma previa. Nada e salvo antes da confirmacao.</small>
+            </div>
+        </div>
+
+        <div class="actions form-actions invoice-import-actions">
+            <button class="btn btn-primary" type="submit" data-bulk-upload-submit>Analisar PDFs</button>
+        </div>
+    </form>
+</div>
+
+{% if linhas %}
+<div class="stats section-spacer invoice-review-stats">
+    <div class="stat-box"><h3>{{ resumo.total }}</h3><p>Arquivos</p></div>
+    <div class="stat-box accent-green"><h3>{{ resumo.pronto }}</h3><p>Prontos</p></div>
+    <div class="stat-box accent-amber"><h3>{{ resumo.conferir }}</h3><p>A conferir</p></div>
+    <div class="stat-box accent-blue"><h3>{{ resumo.duplicada }}</h3><p>Ja existem</p></div>
+    <div class="stat-box accent-red"><h3>{{ resumo.erro }}</h3><p>Erros</p></div>
+</div>
+
+<form class="equipment-form section-spacer" method="post" action="{{ url_for('confirmar_importacao_lote_notas_fiscais') }}">
+    {{ csrf_input()|safe }}
+    <input type="hidden" name="token" value="{{ token }}">
+
+    <div class="panel bulk-review-panel">
+        <div class="bulk-review-header">
+            <div>
+                <div class="section-title">Conferencia da leitura</div>
+                <div class="section-note">Revise numero, data, tags e itens detectados. Somente linhas marcadas como importar entram no banco.</div>
+            </div>
+            <div class="bulk-review-legend" aria-label="Legenda de status">
+                <span class="status-pill" data-status="pronto">Pronto</span>
+                <span class="status-pill" data-status="conferir">Conferir</span>
+                <span class="status-pill" data-status="duplicada">Duplicada</span>
+                <span class="status-pill" data-status="erro">Erro</span>
+            </div>
+        </div>
+
+        {% for linha in linhas %}
+        {% set status_label = {'pronto': 'Pronto', 'conferir': 'Conferir', 'duplicada': 'Duplicada', 'erro': 'Erro'}.get(linha.status, linha.status) %}
+        {% set pode_importar = linha.status in ['pronto', 'conferir'] %}
+        <div class="bulk-invoice-row" data-status="{{ linha.status }}">
+            <input type="hidden" name="row_index" value="{{ linha.index }}">
+            <input type="hidden" name="arquivo_{{ linha.index }}" value="{{ linha.arquivo }}">
+            <input type="hidden" name="nome_original_{{ linha.index }}" value="{{ linha.nome_original }}">
+
+            <div class="bulk-invoice-head">
+                <div class="bulk-invoice-title">
+                    <span class="bulk-file-badge" aria-hidden="true">PDF</span>
+                    <div>
+                        <strong>{{ linha.nome_original }}</strong>
+                        <small>{{ linha.motivo }}</small>
+                    </div>
+                </div>
+                <div class="bulk-invoice-actions">
+                    <span class="status-pill" data-status="{{ linha.status }}">{{ status_label }}</span>
+                    {% if pode_importar %}
+                    <label class="bulk-check">
+                        <input type="checkbox" name="importar_{{ linha.index }}" value="1" {% if linha.importar %}checked{% endif %}>
+                        Importar esta NF
+                    </label>
+                    {% else %}
+                    <span class="muted">Nao importar</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="bulk-invoice-metrics" aria-label="Resumo do PDF">
+                <div><strong>{{ linha.service_tags|length }}</strong><small>Tags lidas</small></div>
+                <div><strong>{{ linha.equipamentos|length }}</strong><small>No inventario</small></div>
+                <div><strong>{{ linha.pendentes|length }}</strong><small>Pendentes</small></div>
+                <div><strong>{{ linha.itens_sem_tag|length }}</strong><small>Itens sem tag</small></div>
+            </div>
+
+            <div class="bulk-invoice-section">
+                <div class="bulk-section-title">Dados extraidos</div>
+                <div class="grid-3 bulk-invoice-data-grid">
+                    <div>
+                        <label for="numero_{{ linha.index }}">Numero NF</label>
+                        <input id="numero_{{ linha.index }}" name="numero_{{ linha.index }}" type="text" value="{{ linha.numero }}" {% if linha.status == 'duplicada' %}readonly{% endif %}>
+                    </div>
+                    <div>
+                        <label for="pagante_{{ linha.index }}">Pagante</label>
+                        <input id="pagante_{{ linha.index }}" name="pagante_{{ linha.index }}" type="text" value="{{ linha.pagante }}">
+                    </div>
+                    <div>
+                        <label for="fornecedor_{{ linha.index }}">Fornecedor</label>
+                        <input id="fornecedor_{{ linha.index }}" name="fornecedor_{{ linha.index }}" type="text" value="{{ linha.fornecedor }}">
+                    </div>
+                    <div>
+                        <label for="data_compra_{{ linha.index }}">Data da compra</label>
+                        <input id="data_compra_{{ linha.index }}" name="data_compra_{{ linha.index }}" type="date" value="{{ linha.data_compra }}">
+                    </div>
+                    <div class="field-wide">
+                        <label for="service_tags_{{ linha.index }}">Service Tags</label>
+                        <textarea id="service_tags_{{ linha.index }}" name="service_tags_{{ linha.index }}" rows="4">{{ linha.service_tags|join('\n') }}</textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bulk-detection-grid">
+                <div class="bulk-detection-box">
+                    <strong>Equipamentos encontrados</strong>
+                    <div class="bulk-detected-list">
+                        {% for equipamento in linha.equipamentos %}
+                        <span class="bulk-detected-item is-ok">
+                            <b>{{ equipamento.service_tag }}</b>
+                            <small>{{ equipamento.patrimonio or 'Sem patrimonio' }}{% if equipamento.nome %} | {{ equipamento.nome }}{% endif %}</small>
+                        </span>
+                        {% else %}
+                        <span class="bulk-empty">Nenhum equipamento cadastrado foi encontrado.</span>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="bulk-detection-box">
+                    <strong>Pendencias</strong>
+                    <div class="bulk-detected-list">
+                        {% for tag in linha.pendentes %}
+                        <span class="bulk-detected-item is-warning">
+                            <b>{{ tag }}</b>
+                            <small>Ainda nao existe no inventario</small>
+                        </span>
+                        {% else %}
+                        <span class="bulk-empty">Nenhuma pendencia detectada.</span>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="bulk-detection-box">
+                    <strong>Produtos no PDF</strong>
+                    <div class="bulk-detected-list">
+                        {% for produto in linha.produtos_detectados %}
+                        <span class="bulk-detected-item">
+                            <b>{{ produto.descricao }}</b>
+                            <small>Qtd. {{ produto.quantidade or 1 }}</small>
+                        </span>
+                        {% else %}
+                        <span class="bulk-empty">Nenhum produto textual detectado.</span>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="bulk-detection-box">
+                    <strong>Itens sem Service Tag</strong>
+                    <div class="bulk-detected-list">
+                        {% for item in linha.itens_sem_tag %}
+                        <span class="bulk-detected-item is-info">
+                            <b>{{ item.descricao }}</b>
+                            <small>Qtd. {{ item.quantidade or 1 }}</small>
+                        </span>
+                        {% else %}
+                        <span class="bulk-empty">Nenhum item sem tag sugerido.</span>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="bulk-items-head section-spacer">
+                <div>
+                    <div class="bulk-section-title">Editar itens sem Service Tag</div>
+                    <div class="field-hint">Ajuste quantidades ou adicione itens que o PDF nao conseguiu identificar.</div>
+                </div>
+                <button class="btn btn-secondary" type="button" data-add-bulk-item-row>Adicionar item</button>
+            </div>
+            <div data-bulk-item-rows>
+            {% for item in linha.itens_sem_tag %}
+            <div class="grid-3 bulk-item-row" data-bulk-item-row>
+                <div class="field-wide">
+                    <label>Descricao</label>
+                    <input name="item_descricao_{{ linha.index }}" type="text" value="{{ item.descricao }}">
+                </div>
+                <div>
+                    <label>Quantidade</label>
+                    <input name="item_quantidade_{{ linha.index }}" type="number" min="1" value="{{ item.quantidade }}">
+                </div>
+                <div>
+                    <label>Observacao</label>
+                    <input name="item_observacoes_{{ linha.index }}" type="text" value="{{ item.observacoes }}">
+                </div>
+                <div class="bulk-item-actions">
+                    <button class="btn btn-outline" type="button" data-remove-bulk-item-row>Remover linha</button>
+                </div>
+            </div>
+            {% endfor %}
+            {% if not linha.itens_sem_tag %}
+            <div class="grid-3 bulk-item-row" data-bulk-item-row>
+                <div class="field-wide">
+                    <label>Descricao</label>
+                    <input name="item_descricao_{{ linha.index }}" type="text" placeholder="Opcional">
+                </div>
+                <div>
+                    <label>Quantidade</label>
+                    <input name="item_quantidade_{{ linha.index }}" type="number" min="1" value="1">
+                </div>
+                <div>
+                    <label>Observacao</label>
+                    <input name="item_observacoes_{{ linha.index }}" type="text" placeholder="Opcional">
+                </div>
+                <div class="bulk-item-actions">
+                    <button class="btn btn-outline" type="button" data-remove-bulk-item-row>Remover linha</button>
+                </div>
+            </div>
+            {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+
+        <div class="actions form-actions">
+            <button class="btn btn-primary" type="submit" data-confirm="Confirmar importacao das NFs marcadas? Duplicadas serao bloqueadas novamente antes de salvar.">
+                Confirmar importacao
+            </button>
+            <a class="btn btn-secondary" href="{{ url_for('importar_lote_notas_fiscais') }}">Cancelar</a>
+        </div>
+    </div>
+</form>
+{% endif %}
+{% endblock %}

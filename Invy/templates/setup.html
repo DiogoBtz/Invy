@@ -1,0 +1,160 @@
+﻿{# Assistente de primeira execucao do Invy. #}
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ page_title or 'Primeira configuracao - Invy' }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='invy-setup-20260702') }}">
+</head>
+
+<body
+    class="login-page login-v2-page setup-page"
+    style="--login-accent: {{ brand.accent|default('#2563eb') }}; --login-accent-alt: {{ brand.accent_alt|default('#14b8a6') }}; --app-brand-accent: {{ brand.accent|default('#2563eb') }}; --app-brand-accent-alt: {{ brand.accent_alt|default('#14b8a6') }};"
+>
+
+{% include "_flash_messages.html" %}
+
+<main class="login-v2-shell setup-shell">
+    <section class="login-v2-visual setup-visual" aria-label="Configuracao inicial do Invy">
+        <div class="login-v2-brand">
+            <div>
+                <strong>Invy</strong>
+                <small>Primeira execucao</small>
+            </div>
+        </div>
+
+        <div class="login-v2-showcase" aria-hidden="true">
+            <div class="login-showcase-copy">
+                <span>Base nova</span>
+                <h2>Configure a empresa e o usuario master antes de abrir o inventario.</h2>
+            </div>
+
+            <div class="login-showcase-board">
+                <div class="login-board-top">
+                    <span></span>
+                    <strong>Setup local</strong>
+                    <small>seguro</small>
+                </div>
+                <div class="login-board-row">
+                    <span>Banco SQLite</span>
+                    <strong>Criado localmente</strong>
+                </div>
+                <div class="login-board-row">
+                    <span>Marca</span>
+                    <strong>White label</strong>
+                </div>
+                <div class="login-board-row">
+                    <span>Consulta de garantia</span>
+                    <strong>Opcional</strong>
+                </div>
+            </div>
+        </div>
+
+        <div class="login-v2-footer">
+            <span>Nenhum banco de outra empresa e incluido no executavel</span>
+        </div>
+    </section>
+
+    <section class="login-v2-panel setup-panel" aria-labelledby="setup-title">
+        <div class="login-v2-heading">
+            <span class="login-v2-kicker">Invy / Configuracao inicial</span>
+            <h1 id="setup-title">Preparar ambiente</h1>
+            <p>Preencha os dados abaixo uma unica vez. Depois disso o Invy abre direto na tela de login ou dashboard.</p>
+        </div>
+
+        <form method="post" class="login-v2-form setup-form">
+            {{ csrf_input()|safe }}
+
+            <div class="login-v2-field">
+                <label for="empresa">Nome da empresa</label>
+                <div class="login-v2-input">
+                    <input id="empresa" name="empresa" type="text" value="{{ form_data.empresa }}" placeholder="Ex: Minha Empresa LTDA" required autofocus>
+                </div>
+            </div>
+
+            <div class="setup-grid">
+                <div class="login-v2-field">
+                    <label for="admin_username">Login master</label>
+                    <div class="login-v2-input">
+                        <input id="admin_username" name="admin_username" type="text" value="{{ form_data.admin_username or 'admin' }}" placeholder="Ex: admin" autocomplete="username" required>
+                    </div>
+                </div>
+
+                <div class="login-v2-field">
+                    <label for="admin_email">E-mail do master</label>
+                    <div class="login-v2-input">
+                        <input id="admin_email" name="admin_email" type="email" value="{{ form_data.admin_email }}" placeholder="Opcional">
+                    </div>
+                </div>
+            </div>
+
+            <div class="setup-grid">
+                <div class="login-v2-field">
+                    <label for="admin_password">Senha master</label>
+                    <div class="login-v2-input">
+                        <input id="admin_password" name="admin_password" type="password" minlength="12" autocomplete="new-password" required>
+                    </div>
+                </div>
+
+                <div class="login-v2-field">
+                    <label for="admin_password_confirm">Confirmar senha</label>
+                    <div class="login-v2-input">
+                        <input id="admin_password_confirm" name="admin_password_confirm" type="password" minlength="12" autocomplete="new-password" required>
+                    </div>
+                </div>
+            </div>
+
+            <details class="setup-optional">
+                <summary>API Dell opcional</summary>
+                <div class="setup-grid setup-optional-grid">
+                    <div class="login-v2-field">
+                        <label for="dell_client_id">Dell Client ID</label>
+                        <div class="login-v2-input">
+                            <input id="dell_client_id" name="dell_client_id" type="text" value="{{ form_data.dell_client_id }}" placeholder="Opcional">
+                        </div>
+                    </div>
+
+                    <div class="login-v2-field">
+                        <label for="dell_client_secret">Dell Client Secret</label>
+                        <div class="login-v2-input">
+                            <input id="dell_client_secret" name="dell_client_secret" type="password" value="{{ form_data.dell_client_secret }}" placeholder="Opcional">
+                        </div>
+                    </div>
+                </div>
+            </details>
+
+            <details class="setup-optional">
+                <summary>Licenca do Invy opcional</summary>
+                <div class="setup-grid setup-optional-grid">
+                    <div class="login-v2-field">
+                        <label for="license_api_url">URL do servidor de licenca</label>
+                        <div class="login-v2-input">
+                            <input id="license_api_url" name="license_api_url" type="url" value="{{ form_data.license_api_url }}" placeholder="Ex: https://invy.seudominio.com.br">
+                        </div>
+                    </div>
+
+                    <div class="login-v2-field">
+                        <label for="license_key">Chave do cliente</label>
+                        <div class="login-v2-input">
+                            <input id="license_key" name="license_key" type="text" value="{{ form_data.license_key }}" placeholder="Ex: INVY-...">
+                        </div>
+                    </div>
+                </div>
+            </details>
+
+            <label class="setup-check">
+                <input type="checkbox" name="accepted_terms" value="1" required>
+                <span>Confirmo que esta instalacao comecara com uma base nova desta empresa.</span>
+            </label>
+
+            <button type="submit" class="login-v2-submit">
+                <span>Configurar e abrir o Invy</span>
+            </button>
+        </form>
+    </section>
+</main>
+
+<script src="{{ url_for('static', filename='js/app.js') }}" defer></script>
+</body>
+</html>

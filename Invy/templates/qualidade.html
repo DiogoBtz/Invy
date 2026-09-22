@@ -1,0 +1,270 @@
+﻿{# Pendencias operacionais e qualidade dos dados do inventario. #}
+{% extends "base.html" %}
+
+{% block content %}
+<div class="topbar">
+    <div>
+        <h1>Pendencias</h1>
+        <div class="subtitle">Painel de qualidade do inventario</div>
+    </div>
+    <div class="page-actions">
+        {% if categoria %}
+        <a class="btn btn-outline" href="{{ url_for('pendencias_inventario') }}">Voltar ao painel</a>
+        {% endif %}
+        <a class="btn btn-secondary" href="{{ url_for('equipamentos') }}">Inventario</a>
+        <a class="btn btn-reports" href="{{ url_for('relatorios') }}">Relatorios</a>
+    </div>
+</div>
+
+<div class="stats quality-overview">
+    <div class="stat-box">
+        <h3>{{ resumo.equipamentos_total }}</h3>
+        <p>Total no inventario</p>
+    </div>
+    <div class="stat-box accent-amber">
+        <h3>{{ resumo.equipamentos_afetados }}</h3>
+        <p>Equipamentos a conferir</p>
+    </div>
+    <div class="stat-box accent-red">
+        <h3>{{ resumo.pendencias_operacionais }}</h3>
+        <p>Pontos de atencao</p>
+    </div>
+    <div class="stat-box">
+        <h3>{{ resumo.nf_pendentes }}</h3>
+        <p>Pendencias NF</p>
+    </div>
+</div>
+
+<div class="panel quality-dashboard-panel">
+    <div class="quality-dashboard-head">
+        <div>
+            <span class="quality-kicker">Visao geral</span>
+            <div class="section-title">Pendencias por tipo</div>
+        </div>
+        <a class="btn btn-secondary" data-export-download href="{{ url_for('exportar_gerencial_completo_xlsx') }}">Baixar Excel</a>
+    </div>
+
+    <div class="quality-bi-layout">
+        <div class="quality-total-card">
+            <span>Pontos abertos</span>
+            <strong>{{ resumo.pendencias_operacionais }}</strong>
+            <small>Clique em um bloco abaixo para abrir os detalhes daquela pendencia.</small>
+        </div>
+        <div class="quality-bar-chart">
+            {% for item in grafico %}
+            <a class="quality-bar-row severity-{{ item.severidade }} {% if item.selecionado %}is-active{% endif %}" href="{{ item.url }}">
+                <span>{{ item.titulo }}</span>
+                <div class="quality-bar-track">
+                    <i style="width: {{ item.percentual }}%"></i>
+                </div>
+                <strong>{{ item.total }}</strong>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<div class="quality-card-grid">
+    {% for card in cartoes %}
+    <a class="quality-card severity-{{ card.severidade }} {% if card.selecionado %}is-selected{% endif %}" href="{{ card.url }}">
+        <span class="quality-severity">{{ card.severidade }}</span>
+        <strong>{{ card.total }}</strong>
+        <h2>{{ card.titulo }}</h2>
+        <p>{{ card.texto }}</p>
+    </a>
+    {% endfor %}
+</div>
+
+{% if categoria == 'pendencias_nf' and pendencias_nf %}
+<div class="panel quality-panel" id="detalhes">
+    <div class="quality-section-head">
+        <div>
+            <span class="quality-kicker">{{ pendencias_nf.total }} item(ns)</span>
+            <div class="section-title">Pendencias de Service Tag em NF</div>
+            {% if pendencias_nf.total > pendencias_nf.limite %}
+            <div class="section-note">Mostrando os {{ pendencias_nf.limite }} registros mais recentes.</div>
+            {% endif %}
+        </div>
+        <a class="btn btn-secondary" href="{{ pendencias_nf.filtro_url }}">Abrir notas</a>
+    </div>
+
+    {% if pendencias_nf.linhas %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>NF</th>
+                    <th>Service Tag</th>
+                    <th>Motivo</th>
+                    <th>Proximo passo</th>
+                    <th>Acao</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in pendencias_nf.linhas %}
+                <tr>
+                    <td data-label="NF">{{ item.nf }}</td>
+                    <td data-label="Service Tag"><span class="service-code">{{ item.service_tag }}</span></td>
+                    <td data-label="Motivo">{{ item.motivo }}</td>
+                    <td data-label="Proximo passo">{{ item.acao }}</td>
+                    <td data-label="Acao"><a class="btn btn-secondary" href="{{ item.nota_url }}">Abrir NF</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="empty-state">Nenhuma pendencia de NF aberta.</div>
+    {% endif %}
+</div>
+{% elif secao_selecionada %}
+<div class="panel quality-panel" id="detalhes">
+    <div class="quality-section-head">
+        <div>
+            <span class="quality-kicker">
+                {{ secao_selecionada.total }} {% if secao_selecionada.tipo == 'colaboradores' %}colaborador(es){% else %}item(ns){% endif %}
+            </span>
+            <div class="section-title">{{ secao_selecionada.titulo }}</div>
+            {% if secao_selecionada.tipo == 'colaboradores' %}
+            <div class="section-note">{{ secao_selecionada.total_equipamentos }} equipamento(s) afetado(s), agrupados por responsavel.</div>
+            {% endif %}
+            {% if secao_selecionada.total > secao_selecionada.limite %}
+            <div class="section-note">Mostrando os {{ secao_selecionada.limite }} primeiros registros. Use Abrir lista para ver tudo no inventario.</div>
+            {% endif %}
+        </div>
+        {% if secao_selecionada.filtro_url %}
+        <a class="btn btn-secondary" href="{{ secao_selecionada.filtro_url }}">Abrir lista</a>
+        {% endif %}
+    </div>
+
+    {% if secao_selecionada.linhas %}
+    <div class="table-wrap">
+        {% if secao_selecionada.tipo == 'termos' %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Tipo</th>
+                    <th>Status</th>
+                    <th>Assinante</th>
+                    <th>E-mail</th>
+                    <th>Envelope</th>
+                    <th>Ultima checagem</th>
+                    <th>Motivo</th>
+                    <th>Acoes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in secao_selecionada.linhas %}
+                <tr>
+                    <td data-label="Tipo">{{ item.tipo }}</td>
+                    <td data-label="Status"><span class="term-status-badge">{{ item.status }}</span></td>
+                    <td data-label="Assinante"><strong>{{ item.assinante }}</strong></td>
+                    <td data-label="E-mail">{{ item.email }}</td>
+                    <td data-label="Envelope"><span class="term-envelope-code">{{ item.envelope }}</span></td>
+                    <td data-label="Ultima checagem">{{ formatar_horario_br(item.checado_em) if item.checado_em else '-' }}</td>
+                    <td data-label="Motivo">{{ item.motivo }}</td>
+                    <td data-label="Acoes">
+                        <div class="action-row">
+                            <a class="btn btn-secondary" href="{{ item.colaborador_url }}">Ver colaborador</a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% elif secao_selecionada.tipo == 'colaboradores' %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Colaborador</th>
+                    <th>E-mail</th>
+                    <th>Responsabilidades</th>
+                    <th>Notebooks</th>
+                    <th>Desktops</th>
+                    <th>Equipamentos</th>
+                    <th>Motivo</th>
+                    <th>Acoes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in secao_selecionada.linhas %}
+                <tr>
+                    <td data-label="Colaborador"><a class="equipment-link" href="{{ item.colaborador_url }}"><strong>{{ item.usuario }}</strong></a></td>
+                    <td data-label="E-mail">{{ item.email }}</td>
+                    <td data-label="Responsabilidades">{{ item.total }} item(ns)</td>
+                    <td data-label="Notebooks">{{ item.notebooks }}</td>
+                    <td data-label="Desktops">{{ item.desktops }}</td>
+                    <td data-label="Equipamentos">
+                        <details>
+                            <summary>Ver {{ item.total }} equipamento(s)</summary>
+                            <div class="quality-detail-list">
+                                {% for eq in item.itens %}
+                                <div>
+                                    <a class="asset-code" href="{{ eq.historico_url }}">{{ eq.patrimonio }}</a>
+                                    <span>{{ eq.tipo }} | {{ eq.service_tag }} | {{ eq.modelo }}</span>
+                                    {% if current_user.can_edit or current_user.is_admin %}
+                                    <a class="btn btn-primary" href="{{ eq.editar_url }}">Editar</a>
+                                    {% endif %}
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </details>
+                    </td>
+                    <td data-label="Motivo">{{ item.motivo }}</td>
+                    <td data-label="Acoes">
+                        <div class="action-row">
+                            <a class="btn btn-secondary" href="{{ item.colaborador_url }}">Ver colaborador</a>
+                            <a class="btn btn-outline" href="{{ item.filtro_url }}">Abrir itens</a>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Patrimonio</th>
+                    <th>Service Tag</th>
+                    <th>Tipo</th>
+                    <th>Modelo</th>
+                    <th>Usuario</th>
+                    <th>Status</th>
+                    <th>Motivo</th>
+                    <th>Acoes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in secao_selecionada.linhas %}
+                <tr>
+                    <td data-label="Patrimonio"><a class="equipment-link asset-code" href="{{ item.historico_url }}">{{ item.patrimonio }}</a></td>
+                    <td data-label="Service Tag">{{ item.service_tag }}</td>
+                    <td data-label="Tipo">{{ item.tipo }}</td>
+                    <td data-label="Modelo">{{ item.modelo }}</td>
+                    <td data-label="Usuario">{{ item.usuario }}</td>
+                    <td data-label="Status">{{ item.status }}</td>
+                    <td data-label="Motivo">{{ item.motivo }}</td>
+                    <td data-label="Acoes">
+                        <div class="action-row">
+                            <a class="btn btn-secondary" href="{{ item.historico_url }}">Detalhes</a>
+                            {% if current_user.can_edit or current_user.is_admin %}
+                            <a class="btn btn-primary" href="{{ item.editar_url }}">Editar</a>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </div>
+    {% else %}
+    <div class="empty-state">Nenhum item nesta pendencia.</div>
+    {% endif %}
+</div>
+{% elif categoria %}
+<div class="empty-state">Categoria nao encontrada.</div>
+{% endif %}
+
+{% endblock %}

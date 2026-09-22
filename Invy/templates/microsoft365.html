@@ -1,0 +1,342 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="topbar">
+    <div>
+        <h1>Microsoft 365</h1>
+        <div class="subtitle">Produtos, Preços e Gastos mensais por colaborador</div>
+    </div>
+    <div class="page-actions">
+        {% if current_user.can_edit or current_user.is_admin %}
+        <form class="inline-action-form" method="post" action="{{ url_for('testar_microsoft365_conexao') }}">
+            {{ csrf_input()|safe }}
+            <button class="btn btn-secondary" type="submit">Testar conexao</button>
+        </form>
+        <form class="inline-action-form" method="post" action="{{ url_for('sincronizar_microsoft365_admin') }}">
+            {{ csrf_input()|safe }}
+            <button class="btn btn-primary" type="submit" data-confirm="Sincronizar usuarios, Licenças e produtos agora?">
+                Sincronizar agora
+            </button>
+        </form>
+        <form class="inline-action-form" method="post" action="{{ url_for('sincronizar_precos_microsoft365_mca_admin') }}">
+            {{ csrf_input()|safe }}
+            <button class="btn btn-secondary" type="submit" data-confirm="Tentar sincronizar precos pelo Price Sheet MCA agora?">
+                Precos MCA
+            </button>
+        </form>
+        {% endif %}
+        <a class="btn btn-outline" href="{{ url_for('relatorio_microsoft365') }}">Baixar Excel</a>
+    </div>
+</div>
+
+<div class="stats m365-cost-stats">
+    <div class="stat-box accent-green">
+        <h3>{{ cost_dashboard.purchased_total_label }}</h3>
+        <p>Total comprado preenchido</p>
+    </div>
+    <div class="stat-box accent-blue">
+        <h3>{{ cost_dashboard.assigned_total_label }}</h3>
+        <p>Gasto em uso por usuarios</p>
+    </div>
+    <div class="stat-box accent-amber">
+        <h3>{{ cost_dashboard.unassigned_total_label }}</h3>
+        <p>Comprado ainda não atribuidos</p>
+    </div>
+    <div class="stat-box {% if cost_dashboard.missing_price_count %}accent-amber{% else %}accent-green{% endif %}">
+        <h3>{{ cost_dashboard.priced_sku_count }}/{{ cost_dashboard.required_sku_count }}</h3>
+        <p>Precos preenchidos</p>
+    </div>
+    <div class="stat-box">
+        <h3>{{ cost_dashboard.collaborator_count }}</h3>
+        <p>Colaboradores com Licenças</p>
+    </div>
+    <div class="stat-box">
+        <h3>{{ status.license_units_consumed }}</h3>
+        <p>Licenças atribuidas</p>
+    </div>
+    <div class="stat-box">
+        <h3>{{ status.license_units_available }}</h3>
+        <p>Licenças disponiveis</p>
+    </div>
+</div>
+
+<section class="panel section-spacer m365-purchase-company-panel">
+    <div class="m365-panel-head">
+        <div>
+            <div class="section-title">Total comprado por empresa</div>
+            <div class="section-note">Quebra do total comprado preenchido por perfil de cobranca.</div>
+        </div>
+        <div class="m365-company-total">
+            <span>Total das empresas</span>
+            <strong>{{ cost_dashboard.purchase_company_total_label }}</strong>
+        </div>
+    </div>
+
+    <div class="m365-company-grid section-spacer">
+        {% for row in cost_dashboard.purchase_company_rows %}
+        <article class="m365-company-card">
+            <div class="m365-company-card-head">
+                <span>{{ row.company }}</span>
+                <strong>{{ row.total_label }}</strong>
+            </div>
+            <div class="m365-company-card-metrics">
+                <div>
+                    <span>Licenças</span>
+                    <strong>{{ row.license_count }}</strong>
+                </div>
+                <div>
+                    <span>Com valor</span>
+                    <strong>{{ row.priced_license_count }}</strong>
+                </div>
+            </div>
+            <small>{{ row.note }}</small>
+        </article>
+        {% endfor %}
+    </div>
+
+    {% if cost_dashboard.purchase_unmapped_summary.license_count %}
+    <div class="m365-products-alert m365-company-unmapped-note section-spacer">
+        <strong>
+            Fora do mapeamento:
+            {{ cost_dashboard.purchase_unmapped_summary.license_count }} licenca(s)
+            | {{ cost_dashboard.purchase_unmapped_summary.total_label }}
+        </strong>
+        <span>
+            {% for item in cost_dashboard.purchase_unmapped_summary["items"][:3] %}
+            {{ item.name }} ({{ item.billing_profile }}){% if not loop.last %}, {% endif %}
+            {% endfor %}
+            {% if cost_dashboard.purchase_unmapped_summary["items"]|length > 3 %}
+            e mais {{ cost_dashboard.purchase_unmapped_summary["items"]|length - 3 }}
+            {% endif %}
+        </span>
+    </div>
+    {% endif %}
+</section>
+
+{% if connection_test %}
+<div class="panel section-spacer">
+    <div class="section-title">Teste de conexao</div>
+    <div class="section-note">{{ connection_test.message }}</div>
+    <div class="table-wrap section-spacer">
+        <table>
+            <thead>
+                <tr>
+                    <th>Checagem</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for check in connection_test.checks %}
+                <tr>
+                    <td data-label="Checagem">{{ check.name }}</td>
+                    <td data-label="Status">
+                        <span class="status-pill" data-status="{{ 'sim' if check.ok else 'nao' }}">
+                            {{ 'OK' if check.ok else 'Falhou' }}
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<div class="panel section-spacer m365-products-panel">
+    <form method="post" action="{{ url_for('salvar_precos_microsoft365_manuais_admin') }}">
+        {{ csrf_input()|safe }}
+        <div class="m365-panel-head">
+            <div>
+                <div class="section-title">Seus Produtos</div>
+                <div class="section-note">
+                    Produtos do Admin Center com nomes, perfis de cobranca e valores usados nos calculos do Invy.
+                </div>
+            </div>
+            {% if current_user.can_edit or current_user.is_admin %}
+            <button class="btn btn-primary" type="submit">Salvar nomes e valores</button>
+            {% endif %}
+        </div>
+
+        <div class="m365-products-summary section-spacer">
+            <div>
+                <span>Itens</span>
+                <strong>{{ status.subscribed_skus }}</strong>
+            </div>
+            <div>
+                <span>Compradas</span>
+                <strong>{{ status.license_units_purchased }}</strong>
+            </div>
+            <div>
+                <span>Disponiveis</span>
+                <strong>{{ status.license_units_available }}</strong>
+            </div>
+            <div>
+                <span>Total comprado</span>
+                <strong>{{ cost_dashboard.purchased_total_label }}</strong>
+            </div>
+            <div>
+                <span>Gasto em uso</span>
+                <strong>{{ cost_dashboard.assigned_total_label }}</strong>
+            </div>
+            <div>
+                <span>Valores pendentes</span>
+                <strong>{{ cost_dashboard.missing_price_count }}</strong>
+            </div>
+        </div>
+
+        {% if cost_dashboard.missing_price_rows %}
+        <div class="m365-products-alert section-spacer">
+            <strong>{{ cost_dashboard.missing_price_count }} valor{% if cost_dashboard.missing_price_count != 1 %}es{% endif %} pendente{% if cost_dashboard.missing_price_count != 1 %}s{% endif %}</strong>
+            <span>
+                {% for row in cost_dashboard.missing_price_rows[:3] %}
+                {{ row.name }}{% if not loop.last %}, {% endif %}
+                {% endfor %}
+                {% if cost_dashboard.missing_price_count > 3 %}
+                e mais {{ cost_dashboard.missing_price_count - 3 }}
+                {% endif %}
+            </span>
+        </div>
+        {% endif %}
+
+        <div class="m365-product-grid section-spacer">
+            {% for product in admin_center_products %}
+            <article class="m365-product-card {% if product.monthly_unit_price_label == '-' %}is-missing-price{% endif %}">
+                {% set product_heading = product.custom_name or product.product_display_name or product.display_name or product.sku_part_number or '-' %}
+                {% set product_subtitle = product.product_display_name if product.product_display_name and product.product_display_name != product_heading else None %}
+                <div class="m365-product-head">
+                    <div class="m365-product-title-row">
+                        <div class="m365-product-vector" data-product-icon="{{ product.product_icon_key or 'license' }}" aria-hidden="true">
+                            <svg viewBox="0 0 32 32" focusable="false">
+                                {% if product.product_icon_key == 'exchange' %}
+                                <path d="M6 10h20v14H6z"></path><path d="m7 11 9 7 9-7"></path>
+                                {% elif product.product_icon_key == 'powerbi' %}
+                                <path d="M8 24V14"></path><path d="M16 24V8"></path><path d="M24 24V18"></path>
+                                {% elif product.product_icon_key == 'copilot' %}
+                                <path d="M16 5l3 7 7 3-7 3-3 7-3-7-7-3 7-3z"></path>
+                                {% elif product.product_icon_key == 'teams' %}
+                                <path d="M12 15a5 5 0 1 0 0-10 5 5 0 0 0 0 10z"></path><path d="M5 27c1-5 4-8 7-8s6 3 7 8"></path><path d="M22 14a4 4 0 1 0 0-8"></path><path d="M21 19c3 0 5 3 6 7"></path>
+                                {% elif product.product_icon_key == 'project' %}
+                                <path d="M7 9h18v16H7z"></path><path d="m11 17 3 3 7-8"></path>
+                                {% elif product.product_icon_key == 'm365' %}
+                                <path d="M7 7h8v8H7z"></path><path d="M17 7h8v8h-8z"></path><path d="M7 17h8v8H7z"></path><path d="M17 17h8v8h-8z"></path>
+                                {% else %}
+                                <path d="M8 6h16v20H8z"></path><path d="M12 12h8"></path><path d="M12 17h8"></path>
+                                {% endif %}
+                            </svg>
+                            <span>{{ product.product_icon_label or 'LIC' }}</span>
+                        </div>
+                        <div>
+                            <strong>{{ product_heading }}</strong>
+                            {% if product_subtitle %}
+                            <span>{{ product_subtitle }}</span>
+                            {% elif product.sku_part_number and product.sku_part_number != product_heading %}
+                            <span>{{ product.sku_part_number }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <span class="status-pill" data-status="{{ product.subscription_status_tone or 'conferir' }}">
+                        {{ product.subscription_status_label or product.status or '-' }}
+                    </span>
+                </div>
+
+                <div class="m365-license-metrics">
+                    <div><span>Atribuidas</span><strong>{{ product.assigned_licenses_label or product.product_consumed_units or 0 }}</strong></div>
+                    <div><span>Compradas API</span><strong>{{ product.graph_total_licenses or product.total_licenses or 0 }}</strong></div>
+                    <div><span>Disponiveis</span><strong>{{ product.allocated_available_units or 0 }}</strong></div>
+                </div>
+
+                <div class="m365-price-row">
+                    {% if product.price_input_name %}
+                    <label class="m365-price-field" for="price_{{ loop.index }}">
+                        <span>Valor unitario mensal</span>
+                        <input
+                            id="price_{{ loop.index }}"
+                            name="{{ product.price_input_name }}__subscription_{{ product.id or loop.index }}"
+                            type="text"
+                            inputmode="decimal"
+                            value="{{ product.price_input_value }}"
+                            placeholder="0,00"
+                            data-m365-shared-input
+                            data-m365-shared-key="{{ product.price_input_name }}"
+                            {% if not (current_user.can_edit or current_user.is_admin) %}disabled{% endif %}
+                        >
+                    </label>
+                    {% else %}
+                    <div class="m365-price-field readonly">
+                        <span>Valor unitario mensal</span>
+                        <strong>{{ product.monthly_unit_price_label if product.monthly_unit_price_label != '-' else 'Pendente' }}</strong>
+                    </div>
+                    {% endif %}
+                    <div class="m365-price-total">
+                        <span>Contrato/mes</span>
+                        <strong>{{ product.monthly_subscription_value_label if product.monthly_subscription_value_label != '-' else '-' }}</strong>
+                    </div>
+                </div>
+
+                <div class="m365-product-edit-panel">
+                <div class="m365-manual-fields">
+                    <label class="m365-product-name-field" for="subscription_name_{{ product.id }}">
+                        <span>Nome do produto no Invy</span>
+                        <input
+                            id="subscription_name_{{ product.id }}"
+                            name="{{ product.custom_name_input_name }}"
+                            type="text"
+                            value="{{ product.custom_name_input_value }}"
+                            placeholder="Ex.: Matriz, Filial, Descontinuado"
+                            {% if not (current_user.can_edit or current_user.is_admin) %}disabled{% endif %}
+                        >
+                    </label>
+                    <label class="m365-product-name-field" for="billing_profile_{{ product.id }}">
+                        <span>Perfil de cobranca no Invy</span>
+                        <input
+                            id="billing_profile_{{ product.id }}"
+                            name="{{ product.billing_profile_input_name }}"
+                            type="text"
+                            value="{{ product.billing_profile_input_value }}"
+                            placeholder="Ex.: Empresa Principal LTDA"
+                            {% if not (current_user.can_edit or current_user.is_admin) %}disabled{% endif %}
+                        >
+                    </label>
+                </div>
+
+                {% if product.product_name_input_name %}
+                <label class="m365-product-name-field" for="product_name_{{ loop.index }}">
+                    <span>Nome da licenca/SKU no Invy</span>
+                    <input
+                        id="product_name_{{ loop.index }}"
+                        name="{{ product.product_name_input_name }}__subscription_{{ product.id or loop.index }}"
+                        type="text"
+                        value="{{ product.product_name_input_value }}"
+                        placeholder="Nome da licenca"
+                        data-m365-shared-input
+                        data-m365-shared-key="{{ product.product_name_input_name }}"
+                        {% if not (current_user.can_edit or current_user.is_admin) %}disabled{% endif %}
+                    >
+                </label>
+                {% else %}
+                <div class="m365-product-name-field readonly">
+                    <span>Nome da licenca/SKU no Invy</span>
+                    <strong>{{ product.product_display_name or '-' }}</strong>
+                </div>
+                {% endif %}
+                </div>
+
+                <div class="m365-product-meta">
+                    <span>Renova: {{ product.renewal_date_label or '-' }}</span>
+                    <span>{{ product.price_source_label or 'Pendente' }}</span>
+                    {% if product.portal_subscription_id %}<span>ID: {{ product.portal_subscription_id }}</span>{% endif %}
+                </div>
+            </article>
+            {% else %}
+            <div class="section-note">Nenhum produto sincronizado.</div>
+            {% endfor %}
+        </div>
+
+        {% if current_user.can_edit or current_user.is_admin %}
+        <div class="actions section-spacer">
+            <button class="btn btn-primary" type="submit">Salvar nomes e valores</button>
+        </div>
+        {% endif %}
+    </form>
+</div>
+{% endblock %}

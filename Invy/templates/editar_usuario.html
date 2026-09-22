@@ -1,0 +1,149 @@
+{# Edicao de usuario: dados, senha opcional, perfil, vinculos e auditoria. #}
+{% extends "base.html" %}
+{% block content %}
+
+{% set profile_value = 'admin' if usuario.is_admin else ('rh' if usuario.is_rh else 'operador') %}
+
+<div class="topbar">
+    <div>
+        <h1>Editar Usuario</h1>
+        <div class="subtitle">Atualize acesso, contexto do colaborador e permissoes</div>
+    </div>
+    <a class="btn btn-outline" href="{{ url_for('usuarios') }}">Voltar</a>
+</div>
+
+<div class="panel form-panel">
+    {% if not usuario.is_admin %}
+    <div class="security-callout">
+        <strong>Promocao para administrador</strong>
+        <span>
+            Para promover este usuario, informe o codigo master do servidor.
+            {% if not master_admin_code_configurado %}
+            Novas contas master estao bloqueadas ate configurar <code>MASTER_ADMIN_CODE</code>.
+            {% endif %}
+        </span>
+    </div>
+    {% endif %}
+
+    <form method="post">
+        {{ csrf_input()|safe }}
+        <div class="grid">
+            <div><label>Nome completo</label><input type="text" name="full_name" value="{{ usuario.full_name }}" required></div>
+            <div><label>Usuario</label><input type="text" name="username" value="{{ usuario.username }}" required></div>
+            <div>
+                <label>E-mail corporativo</label>
+                <input type="email" name="email" value="{{ usuario.email or '' }}" required>
+                <div class="field-hint">Politica atual: {{ email_policy_label or 'qualquer e-mail valido' }}.</div>
+            </div>
+            <div><label>Nova senha</label><input type="password" name="new_password" minlength="12" autocomplete="new-password" placeholder="Deixe em branco para manter"></div>
+        </div>
+
+        <div class="grid-3 section-spacer">
+            <div>
+                <label>Perfil</label>
+                <select name="profile">
+                    <option value="operador" {% if profile_value == 'operador' %}selected{% endif %}>Colaborador</option>
+                    <option value="admin" {% if profile_value == 'admin' %}selected{% endif %}>Administrador</option>
+                    <option value="rh" {% if profile_value == 'rh' %}selected{% endif %}>RH interno</option>
+                </select>
+                <div class="field-hint">Use administrador apenas para contas que gerenciam o sistema.</div>
+            </div>
+            <div><label>Status</label><select name="active"><option value="1" {% if usuario.active %}selected{% endif %}>Ativo</option><option value="0" {% if not usuario.active %}selected{% endif %}>Inativo</option></select></div>
+            {% if not usuario.is_admin %}
+            <div class="master-code-field">
+                <label>Codigo master</label>
+                <input type="password" name="master_admin_code" autocomplete="off" placeholder="Obrigatorio para perfil administrador">
+                <div class="field-hint">O codigo fica somente no <code>.env</code> do servidor.</div>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="grid-3 section-spacer">
+            <div><label>Pode visualizar inventario</label><select name="can_view"><option value="1" {% if usuario.can_view %}selected{% endif %}>Sim</option><option value="0" {% if not usuario.can_view %}selected{% endif %}>Nao</option></select></div>
+            <div><label>Pode criar inventario</label><select name="can_create"><option value="1" {% if usuario.can_create %}selected{% endif %}>Sim</option><option value="0" {% if not usuario.can_create %}selected{% endif %}>Nao</option></select></div>
+            <div><label>Pode editar inventario</label><select name="can_edit"><option value="1" {% if usuario.can_edit %}selected{% endif %}>Sim</option><option value="0" {% if not usuario.can_edit %}selected{% endif %}>Nao</option></select></div>
+        </div>
+        <div class="grid-3 section-spacer">
+            <div><label>Pode excluir inventario</label><select name="can_delete"><option value="1" {% if usuario.can_delete %}selected{% endif %}>Sim</option><option value="0" {% if not usuario.can_delete %}selected{% endif %}>Nao</option></select></div>
+            <div><label>Visualizar chamado RH</label><select name="can_view_rh_requests"><option value="1" {% if usuario.can_view_rh_requests %}selected{% endif %}>Sim</option><option value="0" {% if not usuario.can_view_rh_requests %}selected{% endif %}>Nao</option></select></div>
+        </div>
+
+        <div class="grid-3 section-spacer">
+            <div><label>Telefone</label><input type="text" name="phone" value="{{ usuario.phone or '' }}"></div>
+            <div><label>Cargo</label><input type="text" name="job_title" value="{{ usuario.job_title or '' }}"></div>
+            <div><label>Departamento</label><input type="text" name="department" value="{{ usuario.department or '' }}"></div>
+        </div>
+        <div class="grid-3 section-spacer">
+            <div><label>Gestor</label><input type="text" name="manager_name" value="{{ usuario.manager_name or '' }}"></div>
+            <div><label>Matricula</label><input type="text" name="employee_code" value="{{ usuario.employee_code or '' }}"></div>
+            <div><label>Unidade</label><input type="text" name="unit_name" value="{{ usuario.unit_name or '' }}"></div>
+        </div>
+        <div class="grid-3 section-spacer">
+            <div>
+                <label>Local de trabalho</label>
+                <select name="work_location_type">
+                    <option value="" {% if not usuario.work_location_type %}selected{% endif %}>Nao informado</option>
+                    <option value="sede" {% if usuario.work_location_type == 'sede' %}selected{% endif %}>Sede</option>
+                    <option value="obra" {% if usuario.work_location_type == 'obra' %}selected{% endif %}>Obra</option>
+                </select>
+            </div>
+            <div><label>Sede</label><input type="text" name="site_name" value="{{ usuario.site_name or '' }}"></div>
+            <div><label>Obra</label><input type="text" name="project_name" value="{{ usuario.project_name or '' }}"></div>
+        </div>
+        <div class="grid-3 section-spacer">
+            <div><label>Data de admissao</label><input type="date" name="admission_date" value="{{ usuario.admission_date.isoformat() if usuario.admission_date else '' }}"></div>
+        </div>
+
+        <div class="actions"><button type="submit" class="btn btn-primary">Salvar alteracoes</button></div>
+    </form>
+</div>
+
+<div class="section-spacer">
+    <section class="panel">
+        <div class="section-title">Equipamentos associados</div>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr><th>Patrimonio</th><th>Modelo</th><th>Status</th><th>Local</th></tr>
+                </thead>
+                <tbody>
+                    {% for equipamento in equipamentos_usuario %}
+                    <tr>
+                        <td><a href="{{ url_for('editar_equipamento', equipamento_id=equipamento.id) }}">{{ equipamento.patrimonio or equipamento.service_tag or equipamento.id }}</a></td>
+                        <td>{{ equipamento.nome_equipamento_rfm or '-' }}</td>
+                        <td>{{ equipamento.status_equipamento or '-' }}</td>
+                        <td>{{ equipamento.localizacao or '-' }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="4">Nenhum equipamento encontrado para este usuario.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+
+<div class="panel section-spacer">
+    <div class="section-title">Historico administrativo</div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr><th>Quando</th><th>Usuario</th><th>Acao</th><th>Detalhes</th></tr>
+            </thead>
+            <tbody>
+                {% for item in historico_usuario %}
+                <tr>
+                    <td>{{ formatar_horario_br(item.created_at) }}</td>
+                    <td>{{ item.username }}</td>
+                    <td>{{ item.action }}</td>
+                    <td>{{ item.details or '-' }}</td>
+                </tr>
+                {% else %}
+                <tr><td colspan="4">Sem historico administrativo para este usuario.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}

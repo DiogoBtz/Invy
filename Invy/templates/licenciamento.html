@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="topbar">
+    <div>
+        <h1>Dono do Projeto</h1>
+        <div class="subtitle">Gerencie clientes, Licenças, vencimentos e atualizacoes liberadas.</div>
+    </div>
+</div>
+
+<div class="stats">
+    <div class="stat-box"><h3>{{ resumo.total }}</h3><p>Clientes</p></div>
+    <div class="stat-box"><h3>{{ resumo.approved }}</h3><p>Aprovados</p></div>
+    <div class="stat-box"><h3>{{ resumo.pending }}</h3><p>Pendentes</p></div>
+    <div class="stat-box"><h3>{{ resumo.expired }}</h3><p>Expiradas</p></div>
+    <div class="stat-box"><h3>{{ resumo.blocked }}</h3><p>Bloqueados</p></div>
+    <div class="stat-box"><h3>{{ resumo.updates }}</h3><p>Com update</p></div>
+</div>
+
+<div class="panel">
+    <div class="section-title">Novo cliente</div>
+    <form method="post" class="grid">
+        {{ csrf_input()|safe }}
+        <div><label>Empresa</label><input type="text" name="company_name" required></div>
+        <div><label>Responsavel</label><input type="text" name="contact_name"></div>
+        <div><label>E-mail</label><input type="email" name="contact_email"></div>
+        <div>
+            <label>Status inicial</label>
+            <select name="status">
+                <option value="pending">Pendente</option>
+                <option value="approved">Aprovado</option>
+                <option value="blocked">Bloqueado</option>
+            </select>
+        </div>
+        <div>
+            <label>Plano</label>
+            <select name="plan_type">
+                <option value="monthly">Mensal</option>
+                <option value="annual">Anual</option>
+                <option value="lifetime">Sem vencimento</option>
+            </select>
+        </div>
+        <div><label>Vence em</label><input type="date" name="expires_at"></div>
+        <div class="field-wide"><label>Observacoes</label><textarea name="notes" rows="2"></textarea></div>
+        <div class="actions field-wide"><button class="btn btn-primary" type="submit">Criar chave</button></div>
+    </form>
+</div>
+
+<div class="panel section-spacer">
+    <div class="section-title">Clientes cadastrados</div>
+    <div class="filter-row">
+        <a class="btn btn-secondary" href="{{ url_for('dono_clientes') }}">Todos</a>
+        <a class="btn btn-secondary" href="{{ url_for('dono_clientes', status='approved') }}">Aprovados</a>
+        <a class="btn btn-secondary" href="{{ url_for('dono_clientes', status='pending') }}">Pendentes</a>
+        <a class="btn btn-secondary" href="{{ url_for('dono_clientes', status='expired') }}">Expiradas</a>
+        <a class="btn btn-secondary" href="{{ url_for('dono_clientes', status='blocked') }}">Bloqueados</a>
+    </div>
+
+    <div class="table-wrap section-spacer">
+        <table>
+            <thead>
+                <tr>
+                    <th>Empresa</th>
+                    <th>Licenca</th>
+                    <th>Versao instalada</th>
+                    <th>Atualizacao</th>
+                    <th>Chave</th>
+                    <th>Gerenciar</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for cliente in clientes %}
+                {% set status_atual = effective_license_status(cliente) %}
+                <tr>
+                    <td data-label="Empresa">
+                        <strong>{{ cliente.company_name }}</strong>
+                        <span class="table-subline">{{ cliente.contact_name or '-' }}{% if cliente.contact_email %} / {{ cliente.contact_email }}{% endif %}</span>
+                    </td>
+                    <td data-label="Licenca">
+                        <span class="status-pill" data-status="{{ status_atual }}">{{ license_status_label(status_atual) }}</span>
+                        <span class="table-subline">{{ license_plan_label(cliente.plan_type) }}</span>
+                        <span class="table-subline">Vence: {{ cliente.expires_at.strftime('%d/%m/%Y') if cliente.expires_at else '-' }}</span>
+                    </td>
+                    <td data-label="Versao instalada">
+                        <strong>{{ cliente.app_version or '-' }}</strong>
+                        <span class="table-subline">{{ formatar_horario_br(cliente.last_seen_at) if cliente.last_seen_at else 'Sem consulta' }}</span>
+                        <span class="table-subline">{{ cliente.last_seen_ip or '-' }}</span>
+                    </td>
+                    <td data-label="Atualizacao">
+                        {% if cliente.update_version %}
+                            <strong>{{ cliente.update_version }}</strong>
+                            <span class="table-subline">{{ 'Forcada' if cliente.force_update else 'Liberada' }}</span>
+                        {% else %}
+                            <span class="table-subline">Sem update liberado</span>
+                        {% endif %}
+                    </td>
+                    <td data-label="Chave"><code class="license-key">{{ cliente.license_key }}</code></td>
+                    <td data-label="Gerenciar">
+                        <details class="license-details">
+                            <summary>Editar</summary>
+                            <form method="post" action="{{ url_for('atualizar_status_cliente', client_id=cliente.id) }}" class="license-management-form">
+                                {{ csrf_input()|safe }}
+                                <div>
+                                    <label>Status</label>
+                                    <select name="status">
+                                        <option value="pending" {% if cliente.status == 'pending' %}selected{% endif %}>Pendente</option>
+                                        <option value="approved" {% if cliente.status == 'approved' %}selected{% endif %}>Aprovado</option>
+                                        <option value="blocked" {% if cliente.status == 'blocked' %}selected{% endif %}>Bloqueado</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label>Plano</label>
+                                    <select name="plan_type">
+                                        <option value="monthly" {% if cliente.plan_type == 'monthly' %}selected{% endif %}>Mensal</option>
+                                        <option value="annual" {% if cliente.plan_type == 'annual' %}selected{% endif %}>Anual</option>
+                                        <option value="lifetime" {% if cliente.plan_type == 'lifetime' %}selected{% endif %}>Sem vencimento</option>
+                                    </select>
+                                </div>
+                                <div><label>Vence em</label><input type="date" name="expires_at" value="{{ cliente.expires_at.isoformat() if cliente.expires_at else '' }}"></div>
+                                <div><label>Versao liberada</label><input type="text" name="update_version" value="{{ cliente.update_version or '' }}" placeholder="1.0.1"></div>
+                                <div class="field-wide"><label>Link do pacote</label><input type="url" name="update_url" value="{{ cliente.update_url or '' }}" placeholder="https://..."></div>
+                                <div class="field-wide"><label>Notas da atualizacao</label><textarea name="update_notes" rows="2">{{ cliente.update_notes or '' }}</textarea></div>
+                                <label class="checkbox-line field-wide">
+                                    <input type="checkbox" name="force_update" value="1" {% if cliente.force_update %}checked{% endif %}>
+                                    Forcar aviso mesmo se a versao parecer igual
+                                </label>
+                                <div class="field-wide"><label>Observacoes internas</label><textarea name="notes" rows="2">{{ cliente.notes or '' }}</textarea></div>
+                                <div class="actions field-wide"><button class="btn btn-secondary" type="submit">Salvar licenca</button></div>
+                            </form>
+                        </details>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="6">Nenhum cliente cadastrado.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}

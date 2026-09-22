@@ -1,0 +1,166 @@
+﻿{# Relatorios: exportacao gerencial unica para analise no Excel. #}
+{% extends "base.html" %}
+{% block content %}
+
+<div class="topbar">
+    <div>
+        <h1>Relatorios</h1>
+        <div class="subtitle">Excel unico com inventario, colaboradores, notas fiscais, estoque e garantias</div>
+    </div>
+    <div class="page-actions">
+        {% if current_user.can_create or current_user.is_admin %}
+        <a class="btn btn-secondary" href="{{ url_for('importar_csv') }}">Importar CSV/XLSX</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="panel report-main-panel">
+    <div class="report-main-copy">
+        <span class="report-kicker">Relatorio completo</span>
+        <h2>Inventario Gerencial em Excel</h2>
+        <p>Um arquivo XLSX com abas filtraveis para consulta, conferencia e envio ao gerente.</p>
+    </div>
+    <div class="report-main-action">
+        <a class="btn btn-primary report-download-button" data-export-download href="{{ url_for('exportar_gerencial_completo_xlsx') }}">
+            Baixar Excel completo
+        </a>
+        <a class="btn btn-outline" href="{{ url_for('pendencias_inventario') }}">Ver pendencias</a>
+        <span>Atualizado com os dados atuais do sistema</span>
+    </div>
+</div>
+
+<div class="panel report-integration-card" id="acronis">
+    <div class="report-integration-copy">
+        <span class="report-kicker">Integracao Acronis</span>
+        <h2>Ranking de softwares instalados</h2>
+        <p>Exporta a leitura do Acronis Software Inventory com apps, quantidade de maquinas, percentual e patrimonios vinculados.</p>
+    </div>
+    <div class="report-main-action">
+        <a class="btn btn-primary report-download-button" data-export-download href="{{ url_for('exportar_softwares_acronis_xlsx') }}">
+            Baixar ranking Acronis
+        </a>
+        <a class="btn btn-outline" href="{{ url_for('equipamentos') }}">Abrir inventario</a>
+        <span>A consulta na API acontece somente no download</span>
+    </div>
+</div>
+
+<div class="panel report-integration-card report-genai-card" id="acronis-genai">
+    <div class="report-integration-copy">
+        <span class="report-kicker">Acronis GenAI Protection</span>
+        <h2>Relatorio de IA usada</h2>
+        <p>Exporta apps de IA detectados, quantidade de maquinas, percentual e patrimonios vinculados.</p>
+    </div>
+    <div class="report-main-action">
+        <a class="btn btn-primary report-download-button" data-export-download href="{{ url_for('exportar_ia_acronis_xlsx') }}">
+            Baixar relatorio IA
+        </a>
+        <a class="btn btn-outline" href="{{ url_for('equipamentos') }}">Abrir inventario</a>
+        <span>Relatorio de IA fica concentrado nesta tela</span>
+    </div>
+</div>
+
+<div class="panel quality-dashboard-panel report-bi-panel">
+    <div class="quality-dashboard-head">
+        <div>
+            <span class="quality-kicker">Painel gerencial</span>
+            <div class="section-title">Resumo para exportacao</div>
+        </div>
+        <a class="btn btn-secondary" href="{{ url_for('pendencias_inventario') }}">Abrir pendencias</a>
+    </div>
+
+    <div class="quality-bi-layout">
+        <div class="quality-total-card">
+            <span>Equipamentos no Excel</span>
+            <strong>{{ total_equipamentos }}</strong>
+            <small>{{ total_colaboradores }} colaborador(es), {{ total_notas }} NF(s) e {{ total_lotes }} lote(s) entram no arquivo gerencial.</small>
+        </div>
+        <div class="quality-bar-chart">
+            {% for item in barras_gerenciais %}
+            <a class="quality-bar-row severity-{{ item.severidade }}" href="{{ item.url }}">
+                <span>{{ item.titulo }}</span>
+                <div class="quality-bar-track"><i style="width: {{ item.percentual }}%"></i></div>
+                <strong>{{ item.total }}</strong>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<div class="report-insight-grid">
+    <div class="panel report-chart-card">
+        <div class="section-title">Inventario por status</div>
+        <div class="quality-bar-chart">
+            {% for item in barras_status %}
+            <a class="quality-bar-row severity-{{ item.severidade }}" href="{{ item.url }}">
+                <span>{{ item.titulo }}</span>
+                <div class="quality-bar-track"><i style="width: {{ item.percentual }}%"></i></div>
+                <strong>{{ item.total }}</strong>
+            </a>
+            {% else %}
+            <div class="empty-state">Sem status informado.</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="panel report-chart-card">
+        <div class="section-title">Tipos de equipamento</div>
+        <div class="quality-bar-chart">
+            {% for item in barras_tipos %}
+            <a class="quality-bar-row severity-{{ item.severidade }}" href="{{ item.url }}">
+                <span>{{ item.titulo }}</span>
+                <div class="quality-bar-track"><i style="width: {{ item.percentual }}%"></i></div>
+                <strong>{{ item.total }}</strong>
+            </a>
+            {% else %}
+            <div class="empty-state">Sem tipos cadastrados.</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="panel report-chart-card">
+        <div class="section-title">Garantias</div>
+        <div class="quality-bar-chart">
+            {% for item in barras_garantia %}
+            <a class="quality-bar-row severity-{{ item.severidade }}" href="{{ item.url }}">
+                <span>{{ item.titulo }}</span>
+                <div class="quality-bar-track"><i style="width: {{ item.percentual }}%"></i></div>
+                <strong>{{ item.total }}</strong>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="panel report-chart-card">
+        <div class="section-title">Qualidade do inventario</div>
+        <div class="quality-bar-chart">
+            {% for item in barras_qualidade %}
+            <a class="quality-bar-row severity-{{ item.severidade }}" href="{{ item.url }}">
+                <span>{{ item.titulo }}</span>
+                <div class="quality-bar-track"><i style="width: {{ item.percentual }}%"></i></div>
+                <strong>{{ item.total }}</strong>
+            </a>
+            {% else %}
+            <div class="empty-state">Nenhuma pendencia operacional.</div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<div class="panel report-tabs-panel">
+    <div class="section-title">Abas do Excel</div>
+    <div class="report-tab-grid">
+        <div><strong>Resumo</strong><span>Indicadores gerais do inventario.</span></div>
+        <div><strong>Inventario</strong><span>Todos os cadastros com patrimonio, Service Tag, NF, usuario e pagante do notebook/equipamento.</span></div>
+        <div><strong>Garantias</strong><span>Status, vencimento, dias restantes e ultima consulta.</span></div>
+        <div><strong>Colaboradores</strong><span>Funcionario, empresa, notebook usado, pagante do notebook e divergencia empresa x pagante.</span></div>
+        <div><strong>Microsoft 365</strong><span>Colaboradores, empresas e responsaveis.</span></div>
+        <div><strong>Estoque por lote</strong><span>Quantidade total, vinculada e disponivel por lote.</span></div>
+        <div><strong>Resumo estoque</strong><span>Totais consolidados por tipo de item.</span></div>
+        <div><strong>Notas Fiscais</strong><span>NFs, anexos, equipamentos e itens vinculados.</span></div>
+        <div><strong>Pendencias NF</strong><span>Service Tags lidas em NF que ainda precisam de acao.</span></div>
+        <div><strong>Qualidade Inventario</strong><span>Campos faltantes, garantias, colaboradores a conferir e cadastros incompletos.</span></div>
+        <div><strong>Itens NF sem tag</strong><span>Mouse, teclado, monitor, fonte e outros itens sem Service Tag.</span></div>
+    </div>
+</div>
+
+{% endblock %}

@@ -1,0 +1,216 @@
+{# Navegacao interna redesenhada: painel lateral compacto com grupos e acoes. #}
+{% set is_rh_user = current_user and current_user.is_rh %}
+<aside class="sidebar sidebar-v2" id="app-sidebar">
+    <div class="sidebar-v2-main">
+        <a class="side-brand" href="{{ url_for('colaboradores') if is_rh_user else url_for('dashboard') }}" aria-label="Voltar para o inicio">
+            <span class="side-brand-logo-wrap" aria-hidden="true">
+                <span class="side-brand-invy">{{ 'RH' if is_rh_user else 'I' }}</span>
+            </span>
+            <span class="side-brand-copy">
+                <strong>{% if is_rh_user %}Portal RH{% else %}{{ brand.name|default('Invy') }}{% endif %}</strong>
+                <small>{% if is_rh_user %}Cadastros e termos{% else %}{{ brand.product|default('Inventario de TI') }}{% endif %}</small>
+            </span>
+        </a>
+
+        <div class="side-status-card" aria-label="Status do sistema">
+            <span class="side-status-dot" aria-hidden="true"></span>
+            <div>
+                <strong>{% if is_rh_user %}Fluxo RH ativo{% else %}Sistema operacional{% endif %}</strong>
+                <small>{% if is_rh_user %}Aguardando conferencia do TI{% else %}Ambiente seguro e auditado{% endif %}</small>
+            </div>
+        </div>
+
+        {% if current_user and (current_user.is_admin or current_user.can_create or current_user.can_create_collaborator or current_user.can_see_rh_requests or is_rh_user) %}
+        <div class="side-quick-actions">
+            {% if current_user.is_admin or current_user.can_create %}
+            <a class="side-primary-action" href="{{ url_for('novo_equipamento') }}">
+                <span aria-hidden="true">+</span>
+                <strong>Novo equipamento</strong>
+            </a>
+            {% endif %}
+            {% if current_user.can_create_collaborator %}
+            <a class="side-primary-action side-primary-action-blue" href="{{ url_for('colaboradores') }}#novo-colaborador">
+                <span aria-hidden="true">+</span>
+                <strong>Novo colaborador</strong>
+            </a>
+            {% endif %}
+            {% if is_rh_user %}
+            <a class="side-primary-action side-primary-action-pending" href="{{ url_for('chamados_rh', meus='1') }}">
+                <span aria-hidden="true">!</span>
+                <strong>Aguardando TI</strong>
+                {% if rh_pending_requests_count %}
+                <small class="side-action-count">{{ rh_pending_requests_count }}</small>
+                {% endif %}
+            </a>
+            {% elif current_user.can_see_rh_requests %}
+            <a class="side-primary-action side-primary-action-pending" href="{{ url_for('chamados_rh') }}">
+                <span aria-hidden="true">!</span>
+                <strong>Chamados RH</strong>
+                {% if rh_pending_requests_count %}
+                <small class="side-action-count">{{ rh_pending_requests_count }}</small>
+                {% endif %}
+            </a>
+            {% endif %}
+            {% if current_user.is_admin or current_user.can_create %}
+            <a class="side-primary-action side-primary-action-red" href="{{ url_for('nova_nota_fiscal') }}">
+                <span aria-hidden="true">+</span>
+                <strong>Nova nota NF</strong>
+            </a>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <nav class="side-nav side-nav-clean" aria-label="Menu principal">
+            {% if not is_rh_user %}
+            <div class="side-nav-section">
+                <div class="side-nav-title">Inicio</div>
+                <a href="{{ url_for('dashboard') }}" class="side-nav-link {% if active_page == 'dashboard' %}active{% endif %}">
+                    <span class="side-nav-icon" aria-hidden="true">
+                        <svg class="nav-icon" viewBox="0 0 24 24"><path d="M4 13h6V4H4v9Z"></path><path d="M14 20h6V4h-6v16Z"></path><path d="M4 20h6v-3H4v3Z"></path></svg>
+                    </span>
+                    <span class="side-nav-copy">
+                        <strong>Inicio</strong>
+                        <small>Resumo e alertas</small>
+                    </span>
+                </a>
+            </div>
+
+            <div class="side-nav-section">
+                <div class="side-nav-title">Inventario</div>
+                <a href="{{ url_for('equipamentos') }}" class="side-nav-link {% if active_page in ['lista', 'buscar', 'historico'] %}active{% endif %}">
+                    <span class="side-nav-icon" aria-hidden="true">
+                        <svg class="nav-icon" viewBox="0 0 24 24"><path d="M4 7h16"></path><path d="M4 12h16"></path><path d="M4 17h16"></path><path d="M8 4v16"></path></svg>
+                    </span>
+                    <span class="side-nav-copy">
+                        <strong>Equipamentos</strong>
+                        <small>Busca e lista completa</small>
+                    </span>
+                </a>
+
+                <a href="{{ url_for('pendencias_inventario') }}" class="side-nav-link {% if active_page == 'qualidade' %}active{% endif %}">
+                    <span class="side-nav-icon" aria-hidden="true">
+                        <svg class="nav-icon" viewBox="0 0 24 24"><path d="M5 4h14v16H5V4Z"></path><path d="m8 9 2 2 4-4"></path><path d="M8 16h8"></path></svg>
+                    </span>
+                    <span class="side-nav-copy">
+                        <strong>Qualidade</strong>
+                        <small>Pendencias e dados faltantes</small>
+                    </span>
+                </a>
+            </div>
+            {% endif %}
+
+            <div class="side-nav-section">
+                <div class="side-nav-title">Pessoas</div>
+                <a href="{{ url_for('colaboradores') }}" class="side-nav-link {% if active_page == 'colaboradores' %}active{% endif %}">
+                    <span class="side-nav-icon" aria-hidden="true">
+                        <svg class="nav-icon" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"></circle><path d="M3 20c1.3-4 10.7-4 12 0"></path><path d="M17 11h4"></path><path d="M19 9v4"></path></svg>
+                    </span>
+                    <span class="side-nav-copy">
+                        <strong>Colaboradores</strong>
+                        <small>Equipamentos por pessoa</small>
+                    </span>
+                </a>
+            </div>
+
+            {% if not is_rh_user %}
+            <div class="side-nav-section">
+                <div class="side-nav-title">Integracoes</div>
+                {% if current_user %}
+                <a href="{{ url_for('microsoft365_admin') }}" class="side-nav-link {% if active_page == 'microsoft365' %}active{% endif %}">
+                    <span class="side-nav-icon" aria-hidden="true">
+                        <svg class="nav-icon" viewBox="0 0 24 24"><path d="M4 6h7v7H4V6Z"></path><path d="M13 5h7v8h-7V5Z"></path><path d="M4 15h7v4H4v-4Z"></path><path d="M13 15h7v4h-7v-4Z"></path></svg>
+                    </span>
+                    <span class="side-nav-copy">
+                        <strong>Microsoft 365</strong>
+                        <small>Contas e Licenças</small>
+                    </span>
+                </a>
+                {% endif %}
+
+                <a href="{{ url_for('relatorios') }}#acronis" class="side-nav-link">
+                    <span class="side-nav-icon" aria-hidden="true">
+                        <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 3 4 7v6c0 4 3.4 6.8 8 8 4.6-1.2 8-4 8-8V7l-8-4Z"></path><path d="M9 12l2 2 4-5"></path></svg>
+                    </span>
+                    <span class="side-nav-copy">
+                        <strong>Acronis</strong>
+                        <small>Softwares e agentes</small>
+                    </span>
+                </a>
+            </div>
+
+            <div class="side-nav-section">
+                <div class="side-nav-title">Relatorios</div>
+                <a href="{{ url_for('relatorios') }}" class="side-nav-link {% if active_page == 'relatorios' %}active{% endif %}">
+                    <span class="side-nav-icon" aria-hidden="true">
+                        <svg class="nav-icon" viewBox="0 0 24 24"><path d="M5 20V4h14v16H5Z"></path><path d="M9 17v-5"></path><path d="M12 17V8"></path><path d="M15 17v-3"></path></svg>
+                    </span>
+                    <span class="side-nav-copy">
+                        <strong>Gerenciais</strong>
+                        <small>CSV, PDF e auditoria</small>
+                    </span>
+                </a>
+            </div>
+            {% endif %}
+
+            {% if current_user %}
+            <div class="side-nav-section side-nav-section-system">
+                <div class="side-nav-title">Sistema</div>
+                <a href="{{ url_for('licenca_status') }}" class="side-nav-link {% if active_page == 'licenca' %}active{% endif %}">
+                    <span class="side-nav-icon" aria-hidden="true">
+                        <svg class="nav-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M12 10v7"></path><path d="M12 7h.01"></path></svg>
+                    </span>
+                    <span class="side-nav-copy">
+                        <strong>Sobre</strong>
+                        <small>Licenca, versao e suporte</small>
+                    </span>
+                </a>
+
+                {% if current_user.is_admin %}
+                {% if owner_panel_enabled() %}
+                <a href="{{ url_for('dono_clientes') }}" class="side-nav-link {% if active_page == 'licenciamento' %}active{% endif %}">
+                    <span class="side-nav-icon" aria-hidden="true">
+                        <svg class="nav-icon" viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.5 3 8 7 10 4-2 7-5.5 7-10V6l-7-3Z"></path><path d="M9 12l2 2 4-5"></path></svg>
+                    </span>
+                    <span class="side-nav-copy">
+                        <strong>Dono do Projeto</strong>
+                        <small>Licenças e clientes</small>
+                    </span>
+                </a>
+                {% endif %}
+
+                <a href="{{ url_for('logs') }}" class="side-nav-link {% if active_page == 'logs' %}active{% endif %}">
+                    <span class="side-nav-icon" aria-hidden="true">
+                        <svg class="nav-icon" viewBox="0 0 24 24"><path d="M6 4h12v16H6V4Z"></path><path d="M9 8h6"></path><path d="M9 12h6"></path><path d="M9 16h3"></path></svg>
+                    </span>
+                    <span class="side-nav-copy">
+                        <strong>Auditoria</strong>
+                        <small>Acoes e devolucoes</small>
+                    </span>
+                </a>
+
+                <a href="{{ url_for('usuarios') }}" class="side-nav-link {% if active_page == 'usuarios' %}active{% endif %}">
+                    <span class="side-nav-icon" aria-hidden="true">
+                        <svg class="nav-icon" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"></circle><path d="M3 20c1.3-4 10.7-4 12 0"></path><path d="M17 9h4"></path><path d="M19 7v4"></path></svg>
+                    </span>
+                    <span class="side-nav-copy">
+                        <strong>Usuarios</strong>
+                        <small>Permissoes e acessos</small>
+                    </span>
+                </a>
+                {% endif %}
+            </div>
+            {% endif %}
+        </nav>
+    </div>
+
+    <div class="side-user-card">
+        <div class="side-user-avatar" aria-hidden="true">{{ 'RH' if is_rh_user else 'TI' }}</div>
+        <div class="side-user-copy">
+            <strong>{{ current_user.full_name if current_user else '-' }}</strong>
+            <span>{{ current_user.username if current_user else '-' }}</span>
+        </div>
+        <a class="side-logout" href="{{ url_for('logout') }}" aria-label="Sair">
+            <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 6H5v12h5"></path><path d="M14 8l4 4-4 4"></path><path d="M9 12h9"></path></svg>
+        </a>
+    </div>
+</aside>

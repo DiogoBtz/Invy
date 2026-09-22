@@ -1,0 +1,375 @@
+﻿{# Inventario: lista equipamentos e preserva filtros enviados por query string. #}
+{% extends "base.html" %}
+{% macro page_url(page_number) -%}
+    {%- set args = pagination_args.copy() -%}
+    {%- set _ = args.update({'page': page_number}) -%}
+    {{- url_for('equipamentos', **args) -}}
+{%- endmacro %}
+
+{% block content %}
+
+<div class="topbar">
+    <div>
+        <h1>Inventário</h1>
+        <div class="subtitle">Lista de equipamentos cadastrados na empresa</div>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary" href="{{ url_for('pendencias_inventario') }}">Qualidade</a>
+        <a class="btn btn-primary" href="{{ url_for('novo_equipamento') }}">Cadastrar equipamento</a>
+    </div>
+</div>
+
+<div class="stats">
+    <a class="stat-box" href="{{ url_for('equipamentos') }}"><h3>{{ resumo.total_geral }}</h3><p>Total no inventario</p></a>
+    <a class="stat-box" href="{{ url_for('equipamentos', tipo='Notebook') }}"><h3>{{ resumo.notebooks }}</h3><p>Notebooks</p></a>
+    <a class="stat-box" href="{{ url_for('equipamentos', tipo='Monitor') }}"><h3>{{ resumo.monitores }}</h3><p>Monitores</p></a>
+    <a class="stat-box accent-green" href="{{ url_for('equipamentos', status='Em uso') }}"><h3>{{ resumo.em_uso }}</h3><p>Em uso</p></a>
+    <a class="stat-box accent-blue" href="{{ url_for('equipamentos', status='Estoque') }}"><h3>{{ resumo.disponiveis }}</h3><p>Em estoque</p></a>
+</div>
+
+{% if painel_inventario %}
+<div class="panel quality-dashboard-panel inventory-bi-panel">
+    <div class="quality-dashboard-head">
+        <div>
+            <span class="quality-kicker">Leitura do inventario</span>
+            <div class="section-title">{{ painel_inventario.titulo_total }}</div>
+        </div>
+        <a class="btn btn-secondary" href="{{ url_for('relatorios') }}">Relatorio gerencial</a>
+    </div>
+    <div class="quality-bi-layout">
+        <div class="quality-total-card">
+            <span>{{ 'Itens no filtro atual' if resumo.filtros_ativos else 'Itens cadastrados' }}</span>
+            <strong>{{ painel_inventario.total }}</strong>
+            <small>Clique nas barras para abrir o recorte por status ou tipo de equipamento.</small>
+        </div>
+        <div class="report-insight-grid report-insight-grid-compact">
+            <div class="report-chart-card">
+                <div class="section-title">Por status</div>
+                <div class="quality-bar-chart">
+                    {% for item in painel_inventario.status %}
+                    <a class="quality-bar-row severity-{{ item.severidade }}" href="{{ item.url }}">
+                        <span>{{ item.titulo }}</span>
+                        <div class="quality-bar-track"><i style="width: {{ item.percentual }}%"></i></div>
+                        <strong>{{ item.total }}</strong>
+                    </a>
+                    {% else %}
+                    <div class="empty-state">Sem status neste recorte.</div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="report-chart-card">
+                <div class="section-title">Por tipo</div>
+                <div class="quality-bar-chart">
+                    {% for item in painel_inventario.tipos %}
+                    <a class="quality-bar-row severity-{{ item.severidade }}" href="{{ item.url }}">
+                        <span>{{ item.titulo }}</span>
+                        <div class="quality-bar-track"><i style="width: {{ item.percentual }}%"></i></div>
+                        <strong>{{ item.total }}</strong>
+                    </a>
+                    {% else %}
+                    <div class="empty-state">Sem tipos neste recorte.</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if atalhos_inventario %}
+<div class="inventory-shortcuts section-spacer" aria-label="Atalhos do inventario">
+    {% for atalho in atalhos_inventario %}
+    <a class="inventory-shortcut inventory-shortcut-{{ atalho.tom }}" href="{{ atalho.url }}">
+        <span>{{ atalho.titulo }}</span>
+        <strong>{{ atalho.total }}</strong>
+        <small>{{ atalho.texto }}</small>
+    </a>
+    {% endfor %}
+</div>
+{% endif %}
+
+{# Formulario GET para permitir compartilhar links com filtros aplicados. #}
+<div class="panel inventory-panel">
+    <form class="inventory-filter-form" method="get" action="{{ url_for('equipamentos') }}">
+        {% if garantia %}<input type="hidden" name="garantia" value="{{ garantia }}">{% endif %}
+        <div class="search-box">
+            <input type="text" name="busca" placeholder="Buscar por Patrimonio, Service Tag, acessório, usuário, pagante, peça..." value="{{ busca }}">
+            <input type="text" name="usuario" placeholder="Usuário final" value="{{ usuario }}">
+            <input type="text" name="empresa" placeholder="Empresa do colaborador" value="{{ empresa }}">
+            <input type="text" name="pagante" placeholder="Pagante" value="{{ pagante }}">
+            <input type="text" name="nota_fiscal" placeholder="Numero NF" value="{{ nota_fiscal }}">
+        </div>
+
+        <div class="grid-3">
+            <div>
+                <label>Tipo</label>
+                <select name="tipo">
+                    <option value="">Todos</option>
+                    {% for item in tipos_equipamento %}
+                    <option value="{{ item }}" {% if tipo == item %}selected{% endif %}>{{ item }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label>Status</label>
+                <select name="status">
+                    <option value="">Todos</option>
+                    {% for item in status_equipamento %}
+                    <option value="{{ item }}" {% if status == item %}selected{% endif %}>{{ item }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label>Setor/Função</label>
+                <select name="setor">
+                    <option value="">Todos</option>
+                    {% for item in setores %}
+                    <option value="{{ item }}" {% if setor == item %}selected{% endif %}>{{ item }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label>Departamento</label>
+                <select name="departamento">
+                    <option value="">Todos</option>
+                    <option value="Sem departamento" {% if departamento == 'Sem departamento' %}selected{% endif %}>Sem departamento</option>
+                    {% for item in departamentos %}
+                    <option value="{{ item }}" {% if departamento == item %}selected{% endif %}>{{ item }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label>Data inicial</label>
+                <input type="date" name="data_inicio" min="{{ data_minima }}" max="{{ data_hoje }}" value="{{ data_inicio }}">
+            </div>
+            <div>
+                <label>Data final</label>
+                <input type="date" name="data_fim" min="{{ data_minima }}" max="{{ data_hoje }}" value="{{ data_fim }}">
+            </div>
+            <div>
+                <label>Ordenar por</label>
+                <select name="ordem">
+                    {% for key, label in ordens_equipamentos.items() %}
+                    <option value="{{ key }}" {% if ordem == key %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label>Itens por pagina</label>
+                <select name="per_page">
+                    {% for amount in [10, 25, 50, 100] %}
+                    <option value="{{ amount }}" {% if per_page == amount %}selected{% endif %}>{{ amount }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="actions">
+            <button type="submit" class="btn btn-secondary">Filtrar</button>
+            <a href="{{ url_for('equipamentos') }}" class="btn btn-secondary">Limpar</a>
+        </div>
+
+        {% if garantia_label or tipo or status or setor or departamento or usuario or empresa or pagante or nota_fiscal %}
+        <div class="active-filter-bar">
+            <span>
+                {% if tipo %}Tipo: {{ tipo }}{% endif %}
+                {% if status %}{% if tipo %} | {% endif %}Status: {{ status }}{% endif %}
+                {% if setor %}{% if tipo or status %} | {% endif %}Setor: {{ setor }}{% endif %}
+                {% if departamento %}{% if tipo or status or setor %} | {% endif %}Departamento: {{ departamento }}{% endif %}
+                {% if usuario %}{% if tipo or status or setor %} | {% endif %}Usuário: {{ usuario }}{% endif %}
+                {% if empresa %}{% if tipo or status or setor or usuario %} | {% endif %}Empresa: {{ empresa }}{% endif %}
+                {% if pagante %}{% if tipo or status or setor or usuario or empresa %} | {% endif %}Pagante: {{ pagante }}{% endif %}
+                {% if nota_fiscal %}{% if tipo or status or setor or usuario or empresa or pagante %} | {% endif %}NF: {{ nota_fiscal }}{% endif %}
+                {% if garantia_label %}{% if tipo or status or setor or usuario or pagante or nota_fiscal %} | {% endif %}{{ garantia_label }}{% endif %}
+            </span>
+            <a href="{{ url_for('equipamentos') }}">Remover filtro</a>
+        </div>
+        {% endif %}
+
+        {% if nota_fiscal_relatorio %}
+        <div class="invoice-link-card section-spacer">
+            <div>
+                <span>Relatorio da NF filtrada</span>
+                <strong>{{ nota_fiscal_relatorio.numero }}</strong>
+                <small>
+                    {{ nota_fiscal_relatorio.pagante or '-' }}
+                    | {{ nota_fiscal_relatorio.total_equipamentos_vinculados }} equipamento(s)
+                    | {{ nota_fiscal_relatorio.items|sum(attribute='quantidade') }} item(ns) sem Service Tag
+                </small>
+            </div>
+            <div class="invoice-link-actions">
+                <a class="btn btn-primary" href="{{ url_for('relatorios', nota_fiscal=nota_fiscal_relatorio.numero) }}">Ver relatorio</a>
+                <a class="btn btn-secondary" data-export-download href="{{ url_for('exportar_relatorio_nf_xlsx', nota_fiscal=nota_fiscal_relatorio.numero) }}">XLSX</a>
+                <a class="btn btn-outline" href="{{ url_for('detalhe_nota_fiscal', invoice_id=nota_fiscal_relatorio.id) }}">Abrir NF</a>
+            </div>
+        </div>
+        {% endif %}
+    </form>
+
+    <div class="warranty-filter-strip" aria-label="Filtros de garantia">
+        {% for key, label in warranty_status_labels.items() %}
+        <a
+            class="{% if garantia == key %}is-active{% endif %}"
+            href="{{ url_for('equipamentos', garantia=key, ordem='garantia') }}"
+        >
+            {{ label }}
+        </a>
+        {% endfor %}
+    </div>
+
+    <div class="table-note">
+        {% if pagination.total %}
+        Exibindo {{ pagination.first }}-{{ pagination.last }} de {{ resumo.total_filtrado }} {{ 'resultado(s) do filtro' if resumo.filtros_ativos else 'equipamento(s)' }}{% if resumo.filtros_ativos %}. Total geral: {{ resumo.total_geral }}{% endif %}.
+        {% else %}
+        Nenhum equipamento encontrado{% if resumo.filtros_ativos %} para este filtro{% endif %}. Total geral: {{ resumo.total_geral }}.
+        {% endif %}
+    </div>
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Tipo</th>
+                    <th>Patrimonio</th>
+                    <th>Service Tag Dell</th>
+                    <th>Modelo / Equipamento</th>
+                    <th>Qtd.</th>
+                    <th>Usuário Final</th>
+                    <th>E-mail</th>
+                    <th>Empresa</th>
+                    <th>Pagante</th>
+                    <th>NF</th>
+                    <th>Setor/Função</th>
+                    <th>Departamento</th>
+                    <th>Status</th>
+                    <th>Serviço</th>
+                    <th>Garantia</th>
+                    <th>Ações</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for eq in equipamentos %}
+                {% set garantia_eq = warranty_status(eq) %}
+                {% set em_estoque = eq.status_equipamento == 'Estoque' %}
+                {% set tipo_com_servico = eq.tipo_equipamento in ['Notebook', 'Desktop'] %}
+                <tr>
+                    <td data-label="Tipo">{{ eq.tipo_equipamento }}</td>
+                    <td data-label="Patrimonio"><span class="asset-code">{{ eq.patrimonio or '-' }}</span></td>
+                    <td data-label="Service Tag Dell"><span class="service-code">{{ eq.service_tag or '-' }}</span></td>
+                    <td data-label="Modelo / Equipamento">
+                        {{ eq.nome_equipamento_rfm }}
+                        {% if eq.tipo_equipamento in ['Notebook', 'Desktop'] %}
+                            {% if eq.numero_acessorio or eq.monitor_patrimonio %}
+                            {% if eq.numero_acessorio %}<span class="table-subline">Fonte: <span class="asset-code">{{ eq.numero_acessorio }}</span>{% if eq.nome_acessorio_rfm %} - {{ eq.nome_acessorio_rfm }}{% endif %}</span>{% endif %}
+                            {% if eq.monitor_patrimonio %}<span class="table-subline">Monitor: <span class="asset-code">{{ eq.monitor_patrimonio }}</span></span>{% endif %}
+                            {% else %}
+                            <span class="table-subline">Sem acessorios vinculados</span>
+                            {% endif %}
+                        {% endif %}
+                    </td>
+                    <td data-label="Qtd.">
+                        {% if eq.tipo_equipamento in ['Notebook', 'Desktop'] %}
+                        -
+                        {% else %}
+                        {{ eq.saldo_disponivel if eq.saldo_disponivel is defined else (eq.quantidade_estoque or 1) }}/{{ eq.quantidade_estoque or 1 }}
+                        {% endif %}
+                    </td>
+                    <td data-label="Usuário Final">{{ '-' if em_estoque else (eq.usuario_final or '-') }}</td>
+                    <td data-label="E-mail">{{ '-' if em_estoque else (eq.email_colaborador or '-') }}</td>
+                    <td data-label="Empresa">{{ '-' if em_estoque else (eq.empresa_colaborador or '-') }}</td>
+                    <td data-label="Pagante">
+                        {{ eq.pagante or '-' }}
+                        {% if eq.monitor_pagante %}
+                        <span class="table-subline">Monitor: {{ eq.monitor_pagante }}</span>
+                        {% endif %}
+                    </td>
+                    <td data-label="NF">
+                        {% if eq.invoice %}
+                        <a class="service-code" href="{{ url_for('detalhe_nota_fiscal', invoice_id=eq.invoice.id) }}">{{ eq.invoice.numero }}</a>
+                        {% if eq.invoice.file_path %}<small class="table-subline">Anexo</small>{% endif %}
+                        {% else %}
+                        -
+                        {% endif %}
+                        {% if eq.monitor_invoice %}
+                        <span class="table-subline">
+                            Monitor:
+                            <a class="service-code" href="{{ url_for('detalhe_nota_fiscal', invoice_id=eq.monitor_invoice.id) }}">{{ eq.monitor_invoice.numero }}</a>
+                            {% if eq.monitor_invoice.file_path %} - Anexo{% endif %}
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td data-label="Setor/Função">{{ '-' if em_estoque else (eq.setor_usuario or '-') }}</td>
+                    <td data-label="Departamento">{{ '-' if em_estoque else (eq.departamento or '-') }}</td>
+                    <td data-label="Status"><span class="status-pill" data-status="{{ eq.status_equipamento|lower }}">{{ eq.status_equipamento }}</span></td>
+                    <td data-label="Serviço">{% if tipo_com_servico %}{{ eq.servico_realizado or '-' }}{% else %}-{% endif %}</td>
+                    <td data-label="Garantia">
+                        <span class="warranty-pill" data-warranty="{{ garantia_eq.code }}">{{ garantia_eq.label }}</span>
+                        <small class="table-subline">{{ garantia_eq.date_label }}</small>
+                    </td>
+                    <td data-label="Ações">
+                        <div class="action-row">
+                            {% if eq.tipo_equipamento in ['Notebook', 'Desktop'] %}
+                            <a class="btn btn-secondary" href="{{ url_for('softwares_equipamento', equipamento_id=eq.id) }}">Softwares</a>
+                            {% endif %}
+                            <a class="btn btn-secondary" href="{{ url_for('editar_equipamento', equipamento_id=eq.id, next=current_list_url) }}">Editar</a>
+                            <a class="btn btn-secondary" href="{{ url_for('historico_service_tag', equipamento_id=eq.id) }}">Detalhes</a>
+                            {% if current_user.can_delete or current_user.is_admin %}
+                            <form class="inline-action-form" method="post" action="{{ url_for('excluir_equipamento', equipamento_id=eq.id) }}">
+                                {{ csrf_input()|safe }}
+                                <input type="hidden" name="next" value="{{ current_list_url }}">
+                                <button
+                                    type="submit"
+                                    class="btn btn-danger"
+                                    data-confirm="Deseja excluir {{ eq.patrimonio or eq.service_tag }}? Você continuará nesta lista filtrada depois da exclusão."
+                                >
+                                    Excluir
+                                </button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="17">Nenhum equipamento encontrado.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if pagination.pages > 1 %}
+    <nav class="pagination-nav" aria-label="Paginacao do inventario">
+        <a
+            class="pagination-link {% if not pagination.has_prev %}is-disabled{% endif %}"
+            href="{{ page_url(pagination.prev_num if pagination.has_prev else pagination.page) }}"
+            aria-disabled="{{ 'false' if pagination.has_prev else 'true' }}"
+        >
+            Anterior
+        </a>
+
+        <div class="pagination-pages">
+            {% for page_num in pagination.iter_pages(left_edge=1, left_current=2, right_current=2, right_edge=1) %}
+                {% if page_num %}
+                    <a
+                        class="pagination-page {% if page_num == pagination.page %}is-active{% endif %}"
+                        href="{{ page_url(page_num) }}"
+                        aria-current="{% if page_num == pagination.page %}page{% endif %}"
+                    >
+                        {{ page_num }}
+                    </a>
+                {% else %}
+                    <span class="pagination-gap">...</span>
+                {% endif %}
+            {% endfor %}
+        </div>
+
+        <a
+            class="pagination-link {% if not pagination.has_next %}is-disabled{% endif %}"
+            href="{{ page_url(pagination.next_num if pagination.has_next else pagination.page) }}"
+            aria-disabled="{{ 'false' if pagination.has_next else 'true' }}"
+        >
+            Proxima
+        </a>
+    </nav>
+    {% endif %}
+</div>
+{% endblock %}

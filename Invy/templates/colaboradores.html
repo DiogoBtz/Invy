@@ -1,0 +1,1384 @@
+{# Colaboradores: visao operacional de equipamentos por pessoa. #}
+{% extends "base.html" %}
+{% from "macros/rh.html" import rh_request_queue with context %}
+
+{% block content %}
+<div class="topbar">
+    <div>
+        {% if colaborador_atual %}
+        <h1>{{ colaborador_atual.nome }}</h1>
+        <div class="subtitle">Responsabilidades, equipamentos e lotes vinculados a este colaborador</div>
+        {% else %}
+        {% if current_user.is_rh %}
+        <h1>Portal RH</h1>
+        <div class="subtitle">Abra chamados de novo colaborador, acompanhe o notebook e force a assinatura do termo</div>
+        {% else %}
+        <h1>Colaboradores</h1>
+        <div class="subtitle">Veja com quem estao notebooks, monitores e acessorios cadastrados no inventario</div>
+        {% endif %}
+        {% endif %}
+    </div>
+    <div class="page-actions">
+        {% if colaborador_atual %}
+        <a class="btn btn-primary" href="{{ url_for('colaboradores') }}">Buscar outro</a>
+        {% if not current_user.is_rh %}
+        <a class="btn btn-secondary" href="{{ url_for('equipamentos', usuario=colaborador_atual.nome) }}">Inventario do colaborador</a>
+        {% endif %}
+        {% else %}
+        {% if current_user.can_create_collaborator %}
+        <a class="btn btn-new-collaborator" href="#novo-colaborador">
+            <span aria-hidden="true">+</span>
+            Novo colaborador
+        </a>
+        {% endif %}
+        {% if current_user.can_edit or current_user.is_admin %}
+        <form class="inline-action-form" method="post" action="{{ url_for('sincronizar_microsoft365_colaboradores') }}">
+            {{ csrf_input()|safe }}
+            <button
+                class="btn btn-primary"
+                type="submit"
+                data-confirm="Sincronizar colaboradores da base agora?"
+            >
+                Sincronizar base
+            </button>
+        </form>
+        {% endif %}
+        {% if not current_user.is_rh %}
+        <a class="btn btn-secondary" href="{{ url_for('equipamentos') }}">Inventario</a>
+        {% endif %}
+        {% endif %}
+    </div>
+</div>
+
+{% if not colaborador_atual %}
+{% if current_user.is_rh %}
+<div class="stats rh-stats">
+    <div class="stat-box accent-amber"><h3>{{ resumo_rh.abertos or 0 }}</h3><p>Em andamento</p></div>
+    <div class="stat-box accent-blue"><h3>{{ resumo_rh.notebook_pronto or 0 }}</h3><p>Notebook pronto</p></div>
+    <div class="stat-box"><h3>{{ resumo_rh.termo_enviado or 0 }}</h3><p>Termo enviado</p></div>
+    <div class="stat-box accent-green"><h3>{{ resumo_rh.finalizados or 0 }}</h3><p>Finalizados</p></div>
+</div>
+
+<div class="panel rh-portal-panel section-spacer" id="cadastros-rh-pendentes">
+    <div class="rh-portal-head">
+        <div>
+            <span class="rh-kicker">Fluxo RH -> TI</span>
+            <div class="section-title">Chamados de novo colaborador</div>
+            <div class="section-note">O TI separa o notebook; o RH envia o termo e finaliza somente depois da assinatura.</div>
+        </div>
+        <a class="btn btn-primary" href="#novo-colaborador">Novo colaborador</a>
+    </div>
+
+    <div class="rh-workflow-strip section-spacer" aria-label="Fluxo de cadastro do RH">
+        <div class="rh-workflow-step is-active">
+            <span>1</span>
+            <div><strong>Cadastrar</strong><small>RH informa os dados principais.</small></div>
+        </div>
+        <div class="rh-workflow-step is-active">
+            <span>2</span>
+            <div><strong>Separar notebook</strong><small>TI valida dados e prepara o patrimonio.</small></div>
+        </div>
+        <div class="rh-workflow-step">
+            <span>3</span>
+            <div><strong>Termo e retirada</strong><small>RH envia DocuSign e finaliza apos assinatura.</small></div>
+        </div>
+    </div>
+
+    <div class="rh-pending-grid section-spacer">
+        {% for colaborador in cadastros_rh_para_rh %}
+        <article class="rh-pending-card">
+            <div class="rh-pending-card-top">
+                <span class="rh-avatar">{{ (colaborador.display_name or 'R')[:1] }}</span>
+                <span class="status-pill" data-status="{{ colaborador.rh_status_tone or 'conferir' }}">{{ colaborador.rh_status_label or 'Aberto pelo RH' }}</span>
+            </div>
+            <strong>{{ colaborador.display_name }}</strong>
+            <span>{{ colaborador.mail or colaborador.user_principal_name or 'Sem e-mail' }}</span>
+            {% if colaborador.rh_status_note %}
+            <small class="rh-request-note">{{ colaborador.rh_status_note }}</small>
+            {% endif %}
+            <div class="rh-card-meta">
+                <small>{{ colaborador.empresa_colaborador or 'Empresa nao informada' }}</small>
+                <small>{{ colaborador.department or 'Departamento nao informado' }}</small>
+                {% if colaborador.created_at %}<small>Criado em {{ formatar_horario_br(colaborador.created_at) }}</small>{% endif %}
+            </div>
+            <div class="rh-card-actions">
+                <a class="btn btn-outline btn-compact" href="{{ url_for('colaboradores', busca=colaborador.display_name, colaborador=colaborador.display_name) }}">Abrir cadastro</a>
+            </div>
+        </article>
+        {% else %}
+        <div class="rh-empty-state">
+            <strong>Nenhum cadastro aguardando o TI agora.</strong>
+            <span>Os chamados abertos pelo RH aparecem aqui ate o termo ser assinado e finalizado.</span>
+        </div>
+        {% endfor %}
+    </div>
+    {% if resumo_rh.abertos and resumo_rh.abertos > cadastros_rh_para_rh|length %}
+    <div class="rh-limit-note">
+        Mostrando {{ cadastros_rh_para_rh|length }} de {{ resumo_rh.abertos }} cadastro(s) aberto(s). Use a busca para localizar um colaborador especifico.
+    </div>
+    {% endif %}
+</div>
+{% else %}
+<div class="stats">
+    <div class="stat-box"><h3>{{ resumo.colaboradores }}</h3><p>Colaboradores na base</p></div>
+    {% if paginacao and paginacao.ativa %}
+    <div class="stat-box accent-blue"><h3>{{ resumo.colaboradores_exibidos }}</h3><p>Exibidos nesta pagina</p></div>
+    {% endif %}
+</div>
+{% endif %}
+
+{% if current_user.can_see_rh_requests and cadastros_rh_pendentes %}
+{{ rh_request_queue(
+    cadastros_rh_pendentes,
+    heading='Chamados RH para o TI',
+    note='TI valida os dados, separa o notebook e libera o RH para enviar o termo DocuSign.',
+    panel_id='chamados-rh-ti',
+    compact=False
+) }}
+{% endif %}
+
+{% if current_user.can_create_collaborator %}
+<div class="panel" id="novo-colaborador">
+    <div class="section-title">Novo colaborador</div>
+    <form class="equipment-form section-spacer" method="post" action="{{ url_for('criar_colaborador') }}">
+        {{ csrf_input()|safe }}
+        <div class="grid-3">
+            <div>
+                <label for="novo_display_name">Nome</label>
+                <input id="novo_display_name" name="display_name" type="text" required>
+            </div>
+            <div>
+                <label for="novo_mail">E-mail</label>
+                <input id="novo_mail" name="mail" type="email">
+            </div>
+            <div>
+                <label for="novo_email_pessoal">Email Pessoal</label>
+                <input id="novo_email_pessoal" name="email_pessoal" type="email">
+            </div>
+            <div>
+                <label for="novo_cpf">CPF</label>
+                <input id="novo_cpf" name="cpf" type="text" inputmode="numeric" maxlength="14" data-cpf-mask>
+            </div>
+            <div>
+                <label for="novo_empresa_colaborador">Empresa</label>
+                <select id="novo_empresa_colaborador" name="empresa_colaborador">
+                    <option value="">Nao informado</option>
+                    {% for empresa in empresas_colaborador %}
+                    <option value="{{ empresa }}">{{ empresa }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <label for="novo_department">Departamento</label>
+                <input id="novo_department" name="department" type="text">
+            </div>
+            <div>
+                <label for="novo_job_title">Setor/Função</label>
+                <input id="novo_job_title" name="job_title" type="text">
+            </div>
+            <div>
+                <label for="novo_mobile_phone">Telefone</label>
+                <input id="novo_mobile_phone" name="mobile_phone" type="text">
+            </div>
+            <div class="full">
+                <label class="toggle-card">
+                    <input type="checkbox" name="account_enabled" value="1" checked>
+                    <span class="toggle-switch" aria-hidden="true"></span>
+                    <span>
+                        <strong>Colaborador ativo</strong>
+                        <small>Disponivel para receber equipamentos e responsabilidades.</small>
+                    </span>
+                </label>
+            </div>
+            {% if not current_user.is_rh %}
+            <div class="full">
+                <label class="toggle-card">
+                    <input type="checkbox" name="no_license_confirmed" value="1">
+                    <span class="toggle-switch" aria-hidden="true"></span>
+                    <span>
+                        <strong>Confirmado sem licenca Microsoft 365</strong>
+                        <small>Use quando a pessoa realmente nao deve ter licenca. Ela nao entra na lista de usuarios sem licenca.</small>
+                    </span>
+                </label>
+            </div>
+            {% endif %}
+        </div>
+        <div class="actions section-spacer">
+            <button class="btn btn-primary" type="submit">Cadastrar colaborador</button>
+        </div>
+    </form>
+</div>
+{% endif %}
+
+<div class="panel">
+    <div class="section-title">Buscar colaborador</div>
+    <div class="section-note">
+        {% if graph_status.configured %}
+        Base de colaboradores configurada{% if graph_status.ultimo_sync %}; ultima sincronizacao: {{ formatar_horario_br(graph_status.ultimo_sync) }}{% endif %}.
+        {% else %}
+        Base de colaboradores ainda nao configurada. Preencha MS_GRAPH_TENANT_ID, MS_GRAPH_CLIENT_ID e MS_GRAPH_CLIENT_SECRET no .env.
+        {% endif %}
+    </div>
+    <form method="get" class="section-spacer">
+        <div class="search-box">
+            <input type="text" name="busca" value="{{ busca }}" placeholder="Nome, e-mail, UPN, departamento, setor/função, patrimonio, Service Tag, pagante...">
+        </div>
+        <div class="actions">
+            <button class="btn btn-secondary" type="submit">Buscar</button>
+            <a class="btn btn-outline" href="{{ url_for('colaboradores') }}">Limpar</a>
+        </div>
+    </form>
+
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Colaborador</th>
+                    <th>E-mail</th>
+                    <th>Empresa</th>
+                    <th>CPF</th>
+                    <th>Origem</th>
+                    <th>Status</th>
+                    <th>Departamento</th>
+                    <th>Setor/Função</th>
+                    <th>Licenças 365</th>
+                    <th>Gasto 365</th>
+                    <th>Responsabilidades</th>
+                    <th>Acoes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in colaboradores %}
+                <tr>
+                    <td data-label="Colaborador">
+                        <strong>{{ item.nome }}</strong>
+                        {% if item.rh_revisao_pendente %}
+                        <span class="table-subline rh-pending-subline">Chamado RH: {{ item.rh_status_label or 'Aberto pelo RH' }}</span>
+                        {% endif %}
+                    </td>
+                    <td data-label="E-mail">
+                        {{ item.email or '-' }}
+                        {% if item.email_pessoal %}
+                        <span class="table-subline">Pessoal: {{ item.email_pessoal }}</span>
+                        {% endif %}
+                    </td>
+                    <td data-label="Empresa">{{ item.empresa_colaborador or '-' }}</td>
+                    <td data-label="CPF">{{ formatar_cpf(item.cpf) if item.cpf else '-' }}</td>
+                    <td data-label="Origem">{{ item.origem }}</td>
+                    <td data-label="Status">
+                        {% if item.ativo_365 is sameas true %}
+                        <span class="status-pill" data-status="sim">Ativo</span>
+                        {% elif item.ativo_365 is sameas false %}
+                        <span class="status-pill" data-status="nao">Inativo</span>
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                    <td data-label="Departamento">{{ item.departamento_365 or '-' }}</td>
+                    <td data-label="Setor/Função">{{ item.cargo_365 or '-' }}</td>
+                    <td data-label="Licenças 365">
+                        <strong>{{ item.m365_license_count or 0 }}</strong>
+                        <span class="table-subline">{{ item.m365_license_names or '-' }}</span>
+                    </td>
+                    <td data-label="Gasto 365">
+                        <strong>{{ item.m365_license_total_label or '-' }}</strong>
+                        <span class="table-subline">{{ item.m365_license_value_note or '-' }}</span>
+                    </td>
+                    <td data-label="Responsabilidades">{{ item.total_responsabilidades }} item(ns)</td>
+                    <td data-label="Acoes">
+                        <div class="action-row">
+                            <a class="btn btn-secondary" href="{{ url_for('colaboradores', busca=busca, colaborador=item.chave) }}">Ver detalhes</a>
+                            {% if not current_user.is_rh %}
+                            <a class="btn btn-outline" href="{{ url_for('equipamentos', usuario=item.nome) }}">Inventario</a>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="12">Nenhum colaborador encontrado.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {% if paginacao and paginacao.ativa %}
+    <div class="pagination-bar section-spacer">
+        <span>Pagina {{ paginacao.pagina }} de {{ paginacao.total_paginas }}; {{ paginacao.total }} colaborador(es).</span>
+        <div class="pagination-actions">
+            {% if paginacao.tem_anterior %}
+            <a class="btn btn-outline btn-sm" href="{{ url_for('colaboradores', pagina=paginacao.pagina - 1) }}">Anterior</a>
+            {% endif %}
+            {% if paginacao.tem_proxima %}
+            <a class="btn btn-secondary btn-sm" href="{{ url_for('colaboradores', pagina=paginacao.pagina + 1) }}">Proxima</a>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+</div>
+{% endif %}
+
+{% if colaborador_atual %}
+<div class="panel section-spacer collaborator-detail-panel">
+    <div class="collaborator-detail-head">
+        <div>
+            <div class="section-title">Detalhes de {{ colaborador_atual.nome }}</div>
+            <div class="section-note">
+                {{ colaborador_atual.email or 'Sem e-mail' }}
+                {% if colaborador_atual.email_pessoal %} | Pessoal: {{ colaborador_atual.email_pessoal }}{% endif %}
+                {% if colaborador_atual.empresa_colaborador %} | {{ colaborador_atual.empresa_colaborador }}{% endif %}
+                {% if colaborador_atual.cpf %} | CPF {{ formatar_cpf(colaborador_atual.cpf) }}{% endif %}
+                {% if colaborador_atual.departamento_365 %} | {{ colaborador_atual.departamento_365 }}{% endif %}
+                {% if colaborador_atual.cargo_365 %} | Setor/Função: {{ colaborador_atual.cargo_365 }}{% endif %}
+            </div>
+        </div>
+        <div class="collaborator-summary-grid">
+            <div><strong>{{ colaborador_atual.total_responsabilidades }}</strong><span>Responsabilidades</span></div>
+            <div><strong>{{ colaborador_atual.notebooks }}</strong><span>Notebooks</span></div>
+            <div><strong>{{ colaborador_atual.monitores }}</strong><span>Monitores</span></div>
+            <div><strong>{{ colaborador_atual.itens_nf }}</strong><span>Itens/lotes</span></div>
+        </div>
+    </div>
+
+    {% if colaborador_atual.microsoft365 and colaborador_atual.vinculos_desalinhados %}
+    {% if current_user.can_edit or current_user.is_admin %}
+    <div class="form-alert form-alert-atencao section-spacer">
+        <strong>Dados dos equipamentos diferentes da base de colaboradores</strong>
+        <span>
+            {{ colaborador_atual.vinculos_desalinhados }} vinculo(s) usam nome, e-mail, CPF, empresa, setor/função ou departamento diferente do cadastro oficial deste colaborador.
+        </span>
+        <form class="inline-action-form section-spacer" method="post" action="{{ url_for('sincronizar_vinculos_colaborador', colaborador_id=colaborador_atual.microsoft365.id) }}">
+            {{ csrf_input()|safe }}
+            <button class="btn btn-secondary" type="submit" data-confirm="Sincronizar os equipamentos e itens deste colaborador com os dados atuais da base?">Sincronizar dados nos equipamentos</button>
+        </form>
+    </div>
+    {% endif %}
+    {% endif %}
+
+    {% if current_user.can_send_responsibility_term %}
+    <div class="collaborator-toolbar">
+        {% if current_user.can_edit or current_user.is_admin %}
+        <a class="btn btn-primary" href="#vincular-etiqueta">Vincular Patrimonio</a>
+        <a class="btn btn-secondary" href="#vincular-lote">Vincular lote</a>
+        <a class="btn btn-secondary" href="#vincular-nf">Vincular NF</a>
+        <a class="btn btn-secondary" href="#item-sem-nf">Item sem NF</a>
+        <a class="btn btn-secondary" href="#transferir-responsavel">Transferir</a>
+        {% endif %}
+        <a class="btn btn-secondary" href="#termo-responsabilidade">Enviar termo</a>
+        {% if current_user.can_edit or current_user.is_admin %}
+        <a class="btn btn-secondary" href="#termo-devolucao">Devolução</a>
+        {% if colaborador_atual.microsoft365 %}
+        <a class="btn btn-outline" href="#editar-colaborador">Editar cadastro</a>
+        {% else %}
+        <a class="btn btn-danger" href="#remover-colaborador-legado">Remover legado</a>
+        {% endif %}
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% include "partials/_m365_collaborator_license_card.html" %}
+
+    {% if colaborador_atual.criado_pelo_rh and (current_user.can_see_rh_requests or current_user.is_rh) %}
+    <div class="rh-detail-alert section-spacer">
+        <span class="rh-detail-alert-icon" aria-hidden="true">RH</span>
+        <div class="rh-detail-alert-copy">
+            <strong>Chamado de novo colaborador</strong>
+            <span>
+                {{ colaborador_atual.rh_status_label or 'Aberto pelo RH' }}
+                {% if colaborador_atual.rh_status_note %}: {{ colaborador_atual.rh_status_note }}
+                {% elif colaborador_atual.rh_can_finish %}. Termo assinado. O RH pode finalizar o chamado.
+                {% elif colaborador_atual.rh_can_send_term %}. Notebook pronto. O RH pode enviar o termo de responsabilidade.
+                {% elif colaborador_atual.rh_term_sent %}. Termo enviado. Acompanhe a assinatura DocuSign antes de finalizar.
+                {% else %}. O termo fica bloqueado ate o TI marcar Notebook Pronto.
+                {% endif %}
+            </span>
+        </div>
+        <div class="rh-detail-alert-actions">
+            {% if current_user.is_admin or current_user.can_edit %}
+            <a class="btn btn-secondary btn-sm" href="#vincular-etiqueta">Editar e vincular</a>
+            {% endif %}
+            {% if current_user.is_rh and colaborador_atual.rh_can_finish %}
+            <form class="inline-action-form" method="post" action="{{ url_for('atualizar_status_cadastro_rh', colaborador_id=colaborador_atual.microsoft365.id) }}">
+                {{ csrf_input()|safe }}
+                <input type="hidden" name="return_status" value="completed">
+                <input type="hidden" name="rh_status" value="completed">
+                <input type="hidden" name="rh_status_note" value="Termo assinado. Notebook retirado pelo RH.">
+                <button class="btn btn-primary btn-sm" type="submit" data-confirm="Finalizar este chamado RH?">Finalizar chamado</button>
+            </form>
+            {% endif %}
+            {% if current_user.is_admin and colaborador_atual.rh_status not in ['notebook_ready', 'term_sent', 'completed', 'approved', 'canceled'] %}
+            <form class="inline-action-form" method="post" action="{{ url_for('revisar_cadastro_rh', colaborador_id=colaborador_atual.microsoft365.id) }}">
+                {{ csrf_input()|safe }}
+                <button class="btn btn-primary btn-sm" type="submit" data-confirm="Marcar este chamado como Notebook Pronto?">Notebook pronto</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if termos_responsabilidade %}
+    <div
+        class="term-status-board section-spacer"
+        data-term-status-board
+        data-refresh-url="{{ url_for('termos_responsabilidade_status_json') }}"
+        data-refresh-ids="{{ termos_responsabilidade|map(attribute='id')|join(',') }}"
+    >
+        <div class="term-status-head">
+            <div>
+                <div class="section-title">Termos digitais</div>
+                {% if current_user.is_rh %}
+                <div class="section-note">Responsabilidade, assinatura e acompanhamento do aceite dos equipamentos.</div>
+                {% else %}
+                <div class="section-note">Responsabilidade, devolução, assinatura, CPF e baixa de estoque em um só controle.</div>
+                {% endif %}
+            </div>
+            <span class="term-status-live">Sincronizado</span>
+        </div>
+        <div class="term-status-summary">
+            <div><strong>{{ termos_responsabilidade|length }}</strong><span>Total</span></div>
+            <div><strong>{{ termos_responsabilidade|selectattr('status', 'equalto', 'completed')|list|length }}</strong><span>Assinados</span></div>
+            <div><strong>{{ termos_responsabilidade|rejectattr('status', 'in', ['completed', 'declined', 'voided', 'error'])|list|length }}</strong><span>Pendentes</span></div>
+        </div>
+    </div>
+    <div class="table-wrap section-spacer term-status-table">
+        <table>
+            <thead>
+                <tr>
+                    <th>Tipo / Status</th>
+                    <th>Assinante</th>
+                    <th>CPF</th>
+                    <th>CC</th>
+                    <th>Documentos</th>
+                    <th>Assinado em</th>
+                    <th>Acoes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for termo in termos_responsabilidade %}
+                <tr
+                    class="term-row status-{{ termo.status }} term-kind-{{ termo.term_type or 'responsibility' }}"
+                    data-term-row="{{ termo.id }}"
+                    data-signed-url="{{ url_for('baixar_documento_termo_responsabilidade', term_id=termo.id, tipo='assinado') }}"
+                >
+                    <td class="term-state-cell" data-label="Tipo / Status">
+                        <div class="term-state-stack">
+                            <div class="term-state-top">
+                                <span class="term-type-pill term-type-{{ termo.term_type or 'responsibility' }}">{{ term_type_label(termo.term_type) }}</span>
+                                <span class="term-status-badge status-{{ termo.status }}" data-term-status>{{ term_status_label(termo.status) }}</span>
+                            </div>
+                            <div class="term-flow">
+                                <span class="term-flow-step is-active">Enviado</span>
+                                <span class="term-flow-step {% if termo.status == 'completed' %}is-active{% endif %}">Assinado</span>
+                                {% if termo.term_type == 'return' %}
+                                <span class="term-flow-step {% if termo.return_processed_at %}is-active{% endif %}">Estoque</span>
+                                {% endif %}
+                            </div>
+                            {% if termo.term_type == 'return' and termo.return_condition %}
+                            <span class="term-meta-line success" data-term-return-condition>{{ return_condition_label(termo.return_condition) }}</span>
+                            {% elif termo.term_type == 'return' %}
+                            <span class="term-meta-line warning" data-term-return-condition>Condição pendente</span>
+                            {% endif %}
+                            {% if termo.term_type == 'return' and termo.return_processed_at %}
+                            <span class="term-meta-line success" data-term-return-stock>Estoque confirmado: {{ formatar_horario_br(termo.return_processed_at) }}</span>
+                            {% elif termo.term_type == 'return' %}
+                            <span class="term-meta-line muted" data-term-return-stock>Estoque pendente</span>
+                            {% endif %}
+                            <span class="term-meta-line muted">Checado: <span data-term-checked>{{ formatar_horario_br(termo.last_status_checked_at) if termo.last_status_checked_at else '-' }}</span></span>
+                            {% if termo.error_message %}<span class="term-meta-line danger">{{ termo.error_message }}</span>{% endif %}
+                        </div>
+                    </td>
+                    <td class="term-person-cell" data-label="Assinante">
+                        <div class="term-person">
+                            <span class="term-avatar">{{ (termo.signer_name or '?')[:1] }}</span>
+                            <span>
+                                <strong>{{ termo.signer_name }}</strong>
+                                <span class="table-subline">{{ termo.signer_email }}</span>
+                            </span>
+                        </div>
+                        {% if termo.term_type == 'return' and termo.return_receiver_email %}
+                        <span class="term-meta-line">Recebimento: {{ termo.return_receiver_name or '-' }} | {{ termo.return_receiver_email }}</span>
+                        {% endif %}
+                        {% if termo.envelope_id %}<span class="term-envelope-code">{{ termo.envelope_id }}</span>{% endif %}
+                    </td>
+                    <td class="term-compact-cell" data-label="CPF" data-term-cpf>{{ formatar_cpf(termo.signer_cpf) if termo.signer_cpf else '-' }}</td>
+                    <td class="term-compact-cell" data-label="CC">{{ termo.cc_email or '-' }}</td>
+                    <td data-label="Documentos">
+                        <div class="term-doc-actions">
+                            {% if termo.document_path %}
+                            <a class="btn btn-outline btn-compact" href="{{ url_for('baixar_documento_termo_responsabilidade', term_id=termo.id, tipo='original') }}">Original</a>
+                            {% endif %}
+                            {% if termo.signed_document_path %}
+                            <a class="btn btn-secondary btn-compact" data-term-signed-link href="{{ url_for('baixar_documento_termo_responsabilidade', term_id=termo.id, tipo='assinado') }}">Assinado</a>
+                            {% elif termo.status == 'completed' %}
+                            <a class="btn btn-secondary btn-compact" data-term-signed-link href="{{ url_for('baixar_documento_termo_responsabilidade', term_id=termo.id, tipo='assinado') }}">Baixar assinado</a>
+                            {% endif %}
+                        </div>
+                    </td>
+                    <td data-label="Assinado em" data-term-completed>{{ formatar_horario_br(termo.completed_at) if termo.completed_at else '-' }}</td>
+                    <td data-label="Acoes">
+                        <div class="term-row-actions">
+                            {% set pode_gerenciar_termo = (current_user.can_edit or current_user.is_admin or (current_user.is_rh and (termo.term_type or 'responsibility') == 'responsibility')) %}
+                            {% if termo.envelope_id and pode_gerenciar_termo %}
+                            <form class="inline-action-form" method="post" action="{{ url_for('atualizar_status_termo_responsabilidade', term_id=termo.id) }}">
+                                {{ csrf_input()|safe }}
+                                <input type="hidden" name="colaborador_nome" value="{{ colaborador_atual.nome }}">
+                                <input type="hidden" name="colaborador_chave" value="{{ colaborador_atual.chave }}">
+                                <button class="btn btn-outline btn-compact" type="submit">Atualizar</button>
+                            </form>
+                            {% if termo.status not in ['completed', 'declined', 'voided'] %}
+                            {% if termo.status in ['sent', 'delivered'] and (current_user.can_edit or current_user.is_admin) %}
+                            <form class="inline-action-form" method="post" action="{{ url_for('corrigir_termo_responsabilidade', term_id=termo.id) }}">
+                                {{ csrf_input()|safe }}
+                                <input type="hidden" name="colaborador_nome" value="{{ colaborador_atual.nome }}">
+                                <input type="hidden" name="colaborador_chave" value="{{ colaborador_atual.chave }}">
+                                <button class="btn btn-outline btn-compact" type="submit" data-confirm="Abrir a correcao deste envelope no DocuSign?">Corrigir</button>
+                            </form>
+                            {% endif %}
+                            <form class="inline-action-form" method="post" action="{{ url_for('reenviar_termo_responsabilidade', term_id=termo.id) }}">
+                                {{ csrf_input()|safe }}
+                                <input type="hidden" name="colaborador_nome" value="{{ colaborador_atual.nome }}">
+                                <input type="hidden" name="colaborador_chave" value="{{ colaborador_atual.chave }}">
+                                <button class="btn btn-secondary btn-compact" type="submit" data-confirm="Reenviar o e-mail de assinatura pelo DocuSign?">Reenviar</button>
+                            </form>
+                            {% endif %}
+                            {% endif %}
+                            <span class="table-subline">Enviado: {{ formatar_horario_br(termo.sent_at or termo.created_at) }}</span>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {% if current_user.can_send_responsibility_term %}
+    {% set termo_rh_bloqueado = current_user.is_rh and colaborador_atual.criado_pelo_rh and not colaborador_atual.rh_can_send_term %}
+    <details class="panel collaborator-action-card term-action-card term-action-responsibility section-spacer" id="termo-responsabilidade">
+        <summary>
+            <span class="term-action-icon">TR</span>
+            <span class="term-action-copy">
+                <strong>Enviar termo de responsabilidade</strong>
+                <small>Coleta assinatura, CPF e registra o aceite dos equipamentos.</small>
+            </span>
+            <span class="term-action-brand">
+                <img src="{{ url_for('static', filename='images/partners/docusign.png') }}" alt="DocuSign">
+            </span>
+            <span class="term-action-toggle">Abrir</span>
+        </summary>
+        {% if not docusign_settings.enabled %}
+        <div class="form-alert form-alert-atencao section-spacer">
+            <strong>DocuSign desativado</strong>
+            <span>Ative DOCUSIGN_ENABLED no .env para enviar termos por assinatura digital.</span>
+        </div>
+        {% elif not docusign_settings.api_ready %}
+        <div class="form-alert form-alert-atencao section-spacer">
+            <strong>DocuSign incompleto</strong>
+            <span>Variaveis pendentes: {{ docusign_settings.missing_api_fields|join(', ') }}.</span>
+        </div>
+        {% elif not colaborador_atual.email %}
+        <div class="form-alert form-alert-atencao section-spacer">
+            <strong>Colaborador sem e-mail</strong>
+            <span>Informe um e-mail abaixo antes de enviar o termo.</span>
+        </div>
+        {% elif termo_rh_bloqueado %}
+        <div class="form-alert form-alert-atencao section-spacer">
+            <strong>Termo bloqueado pelo fluxo</strong>
+            {% if colaborador_atual.rh_term_signed %}
+            <span>O termo ja foi assinado. Finalize o chamado RH para encerrar a retirada do notebook.</span>
+            {% elif colaborador_atual.rh_term_sent %}
+            <span>Ja existe um termo enviado. Acompanhe a assinatura ou use Reenviar no envelope DocuSign.</span>
+            {% else %}
+            <span>O TI precisa marcar este chamado como Notebook Pronto antes do RH enviar o termo de responsabilidade.</span>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% if not termo_rh_bloqueado %}
+        <form class="equipment-form term-send-form section-spacer" method="post" action="{{ url_for('enviar_termo_responsabilidade_colaborador') }}" enctype="multipart/form-data" data-term-signature-form data-default-x="{{ term_signature_defaults.x }}" data-default-y="{{ term_signature_defaults.y }}">
+            {{ csrf_input()|safe }}
+            <input type="hidden" name="colaborador_nome" value="{{ colaborador_atual.nome }}">
+            <input type="hidden" name="colaborador_chave" value="{{ colaborador_atual.chave }}">
+            <input type="hidden" name="signature_position" value="custom">
+
+            <div class="term-send-layout">
+                <div class="term-config-panel">
+                    <div class="term-compose-head">
+                        <div>
+                            <span class="term-eyebrow">Envelope DocuSign</span>
+                            <strong>Dados do envio</strong>
+                        </div>
+                        <button type="button" class="btn btn-outline btn-compact" data-term-correct-fields>Corrigir dados</button>
+                    </div>
+
+                    <div class="term-field-stack">
+                        <section class="term-field-section">
+                            <div class="term-section-top">
+                                <span class="term-section-number">1</span>
+                                <strong>Assinante</strong>
+                            </div>
+                            <div class="grid-3 term-field-grid">
+                                <div>
+                                    <label for="termo_signer_name">Nome</label>
+                                    <input id="termo_signer_name" name="signer_name" type="text" value="{{ colaborador_atual.nome }}" required>
+                                </div>
+                                <div>
+                                    <label for="termo_signer_email">E-mail</label>
+                                    <input id="termo_signer_email" name="signer_email" type="email" value="{{ colaborador_atual.email }}" required>
+                                </div>
+                                <div>
+                                    <label for="termo_signer_cpf">CPF</label>
+                                    <input id="termo_signer_cpf" name="signer_cpf" type="text" value="{{ formatar_cpf(colaborador_atual.cpf) if colaborador_atual.cpf else '' }}" inputmode="numeric" maxlength="14" data-cpf-mask>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="term-field-section">
+                            <div class="term-section-top">
+                                <span class="term-section-number">2</span>
+                                <strong>Cópias e documento</strong>
+                            </div>
+                            <div class="grid-3 term-field-grid">
+                                <div>
+                                    <label for="termo_cc_email">CC</label>
+                        <input id="termo_cc_email" name="cc_email" type="email" value="" placeholder="copia@empresa.com.br">
+                                </div>
+                                <div>
+                                    <label for="termo_cc_email_2">CC 2</label>
+                        <input id="termo_cc_email_2" name="cc_email_2" type="email" value="" placeholder="copia2@empresa.com.br">
+                                </div>
+                                <div>
+                                    <label for="termo_asset_value">Valor de mercado</label>
+                                    <input id="termo_asset_value" name="asset_value" type="text" value="R$ 6.100,00">
+                                </div>
+                                <div class="field-wide">
+                                    <label for="termo_manual_document">DOCX/PDF revisado</label>
+                                    <input id="termo_manual_document" name="manual_document" type="file" accept=".docx,.pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf">
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="term-field-section">
+                            <div class="term-section-top">
+                                <span class="term-section-number">3</span>
+                                <strong>Assunto e mensagem</strong>
+                            </div>
+                            <div class="grid-3 term-field-grid">
+                                <div class="field-wide">
+                                    <label for="termo_email_subject">Assunto</label>
+                                    <input id="termo_email_subject" name="email_subject" type="text" value="Termo de responsabilidade - {{ colaborador_atual.nome }}">
+                                </div>
+                                <div class="full">
+                                    <label for="termo_email_blurb">Mensagem</label>
+                                    <textarea id="termo_email_blurb" name="email_blurb" rows="2">Olá, por favor assine o termo de responsabilidade dos equipamentos recebidos.</textarea>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <div class="term-equipment-head section-spacer">
+                        <div>
+                            <span class="term-eyebrow">Itens selecionados</span>
+                            <strong>Equipamentos do termo</strong>
+                        </div>
+                        <span class="term-equipment-count">{{ colaborador_atual.equipamentos|length }} item(ns)</span>
+                    </div>
+                    <div class="term-equipment-grid">
+                        {% for eq in colaborador_atual.equipamentos %}
+                        <label class="term-equipment-card">
+                            <input type="checkbox" name="equipment_ids" value="{{ eq.id }}" checked>
+                            <span class="term-equipment-copy">
+                                <strong>{{ eq.patrimonio or '-' }}</strong>
+                                <span>{{ eq.tipo_equipamento or '-' }} | {{ eq.nome_equipamento_rfm or eq.nome_acessorio_rfm or '-' }}</span>
+                                <small>{{ eq.service_tag or eq.numero_acessorio or 'Sem Service Tag' }}</small>
+                                <span class="term-equipment-tags">
+                                    <em>{{ eq.status_equipamento or 'Em uso' }}</em>
+                                    <em>{{ eq.pagante or 'Sem pagante' }}</em>
+                                </span>
+                            </span>
+                        </label>
+                        {% else %}
+                        <div class="empty-state compact">Nenhum equipamento individual vinculado a este colaborador.</div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="term-preview-panel">
+                    <div class="term-preview-head">
+                        <strong>Assinatura final</strong>
+                        <span>P{{ term_signature_defaults.page }} / Rubrica P{{ term_initial_defaults.page }}</span>
+                    </div>
+                    <div class="term-preview-page" data-term-preview>
+                        <span class="term-cpf-marker">CPF</span>
+                        <div class="term-preview-line"></div>
+                        <button type="button" class="term-signature-marker" data-term-marker aria-label="Posicao da assinatura">
+                            Assinatura
+                        </button>
+                    </div>
+                    <div class="term-coordinate-grid">
+                        <div>
+                            <label for="termo_signature_page">Pagina</label>
+                            <input id="termo_signature_page" name="signature_page" type="number" min="1" max="20" value="{{ term_signature_defaults.page }}">
+                        </div>
+                        <div>
+                            <label for="termo_signature_x">X</label>
+                            <input id="termo_signature_x" name="signature_x" type="number" min="0" max="595" value="{{ term_signature_defaults.x }}" data-term-x>
+                        </div>
+                        <div>
+                            <label for="termo_signature_y">Y</label>
+                            <input id="termo_signature_y" name="signature_y" type="number" min="0" max="842" value="{{ term_signature_defaults.y }}" data-term-y>
+                        </div>
+                    </div>
+                    <div class="term-preset-row">
+                        <button type="button" class="btn btn-outline btn-compact" data-term-preset="left">Esquerda</button>
+                        <button type="button" class="btn btn-outline btn-compact" data-term-preset="center">Centro</button>
+                        <button type="button" class="btn btn-outline btn-compact" data-term-preset="right">Direita</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="actions section-spacer">
+                <button class="btn btn-outline" type="submit" name="term_action" value="draft">Baixar DOCX para editar</button>
+                <button class="btn btn-primary" type="submit" name="term_action" value="send" data-confirm="Enviar termo de responsabilidade pelo DocuSign para este colaborador?">Enviar para assinatura</button>
+            </div>
+        </form>
+        {% endif %}
+    </details>
+
+    {% endif %}
+    {% if current_user.can_edit or current_user.is_admin %}
+    <details class="panel collaborator-action-card term-action-card term-action-return section-spacer" id="termo-devolucao">
+        <summary>
+            <span class="term-action-icon">TD</span>
+            <span class="term-action-copy">
+                <strong>Enviar termo de devolução</strong>
+                <small>Assinatura em duas etapas, condição do recebimento e baixa no estoque.</small>
+            </span>
+            <span class="term-action-brand">
+                <img src="{{ url_for('static', filename='images/partners/docusign.png') }}" alt="DocuSign">
+            </span>
+            <span class="term-action-toggle">Abrir</span>
+        </summary>
+        {% if not docusign_settings.enabled %}
+        <div class="form-alert form-alert-atencao section-spacer">
+            <strong>DocuSign desativado</strong>
+            <span>Ative DOCUSIGN_ENABLED no .env para enviar termos por assinatura digital.</span>
+        </div>
+        {% elif not docusign_settings.api_ready %}
+        <div class="form-alert form-alert-atencao section-spacer">
+            <strong>DocuSign incompleto</strong>
+            <span>Variaveis pendentes: {{ docusign_settings.missing_api_fields|join(', ') }}.</span>
+        </div>
+        {% elif not colaborador_atual.email_pessoal %}
+        <div class="form-alert form-alert-atencao section-spacer">
+            <strong>Colaborador sem e-mail pessoal</strong>
+            <span>Informe o e-mail pessoal abaixo antes de enviar o termo.</span>
+        </div>
+        {% endif %}
+
+        <form class="equipment-form term-send-form section-spacer" method="post" action="{{ url_for('enviar_termo_devolucao_colaborador') }}" enctype="multipart/form-data" data-term-signature-form data-default-x="{{ term_return_signature_defaults.x }}" data-default-y="{{ term_return_signature_defaults.y }}">
+            {{ csrf_input()|safe }}
+            <input type="hidden" name="colaborador_nome" value="{{ colaborador_atual.nome }}">
+            <input type="hidden" name="colaborador_chave" value="{{ colaborador_atual.chave }}">
+            <input type="hidden" name="signature_position" value="custom">
+
+            <div class="term-send-layout">
+                <div class="term-config-panel">
+                    <div class="term-compose-head">
+                        <div>
+                            <span class="term-eyebrow">Envelope DocuSign</span>
+                            <strong>Dados da devolução</strong>
+                        </div>
+                        <button type="button" class="btn btn-outline btn-compact" data-term-correct-fields>Corrigir dados</button>
+                    </div>
+
+                    <div class="term-field-stack">
+                        <section class="term-field-section">
+                            <div class="term-section-top">
+                                <span class="term-section-number">1</span>
+                                <strong>Assinante</strong>
+                            </div>
+                            <div class="grid-3 term-field-grid">
+                                <div>
+                                    <label for="devolucao_signer_name">Nome</label>
+                                    <input id="devolucao_signer_name" name="signer_name" type="text" value="{{ colaborador_atual.nome }}" required>
+                                </div>
+                                <div>
+                                    <label for="devolucao_signer_email">E-mail pessoal</label>
+                                    <input id="devolucao_signer_email" name="signer_email" type="email" value="{{ colaborador_atual.email_pessoal or '' }}" required>
+                                </div>
+                                <div>
+                                    <label for="devolucao_signer_cpf">CPF</label>
+                                    <input id="devolucao_signer_cpf" name="signer_cpf" type="text" value="{{ formatar_cpf(colaborador_atual.cpf) if colaborador_atual.cpf else '' }}" inputmode="numeric" maxlength="14" data-cpf-mask>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="term-field-section">
+                            <div class="term-section-top">
+                                <span class="term-section-number">2</span>
+                                <strong>Recebimento</strong>
+                            </div>
+                            <div class="grid-3 term-field-grid">
+                                <div>
+                                    <label for="devolucao_receiver_name">Responsável recebimento</label>
+                                    <input id="devolucao_receiver_name" name="return_receiver_name" type="text" value="{{ current_user.username if current_user else '' }}" required>
+                                </div>
+                                <div>
+                                    <label for="devolucao_receiver_email">E-mail recebimento</label>
+                                    <input id="devolucao_receiver_email" name="return_receiver_email" type="email" value="{{ current_user.email if current_user and current_user.email else '' }}" required>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="term-field-section">
+                            <div class="term-section-top">
+                                <span class="term-section-number">3</span>
+                                <strong>Cópias e documento</strong>
+                            </div>
+                            <div class="grid-3 term-field-grid">
+                                <div>
+                                    <label for="devolucao_cc_email">CC</label>
+                        <input id="devolucao_cc_email" name="cc_email" type="email" value="" placeholder="copia@empresa.com.br">
+                                </div>
+                                <div>
+                                    <label for="devolucao_cc_email_2">CC 2</label>
+                        <input id="devolucao_cc_email_2" name="cc_email_2" type="email" value="" placeholder="copia2@empresa.com.br">
+                                </div>
+                                <div class="field-wide">
+                                    <label for="devolucao_manual_document">DOCX/PDF revisado</label>
+                                    <input id="devolucao_manual_document" name="manual_document" type="file" accept=".docx,.pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/pdf">
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="term-field-section">
+                            <div class="term-section-top">
+                                <span class="term-section-number">4</span>
+                                <strong>Assunto e mensagem</strong>
+                            </div>
+                            <div class="grid-3 term-field-grid">
+                                <div class="field-wide">
+                                    <label for="devolucao_email_subject">Assunto</label>
+                                    <input id="devolucao_email_subject" name="email_subject" type="text" value="Termo de devolução - {{ colaborador_atual.nome }}">
+                                </div>
+                                <div class="full">
+                                    <label for="devolucao_email_blurb">Mensagem</label>
+                                    <textarea id="devolucao_email_blurb" name="email_blurb" rows="2">Olá, por favor assine o termo de devolução dos equipamentos.</textarea>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <div class="term-equipment-head section-spacer">
+                        <div>
+                            <span class="term-eyebrow">Itens selecionados</span>
+                            <strong>Equipamentos devolvidos</strong>
+                        </div>
+                        <span class="term-equipment-count">{{ colaborador_atual.equipamentos|length }} item(ns)</span>
+                    </div>
+                    <div class="term-equipment-grid">
+                        {% for eq in colaborador_atual.equipamentos %}
+                        <label class="term-equipment-card">
+                            <input type="checkbox" name="equipment_ids" value="{{ eq.id }}" checked>
+                            <span class="term-equipment-copy">
+                                <strong>{{ eq.patrimonio or '-' }}</strong>
+                                <span>{{ eq.tipo_equipamento or '-' }} | {{ eq.nome_equipamento_rfm or eq.nome_acessorio_rfm or '-' }}</span>
+                                <small>{{ eq.service_tag or eq.numero_acessorio or 'Sem Service Tag' }}</small>
+                                <span class="term-equipment-tags">
+                                    <em>{{ eq.status_equipamento or 'Em uso' }}</em>
+                                    <em>{{ eq.pagante or 'Sem pagante' }}</em>
+                                </span>
+                            </span>
+                        </label>
+                        {% else %}
+                        <div class="empty-state compact">Nenhum equipamento individual vinculado a este colaborador.</div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="term-preview-panel">
+                    <div class="term-preview-head">
+                        <strong>Assinatura da devolução</strong>
+                        <span>P{{ term_return_signature_defaults.page }}</span>
+                    </div>
+                    <div class="term-preview-page term-preview-page-return" data-term-preview>
+                        <span class="term-cpf-marker">CPF</span>
+                        <div class="term-preview-line"></div>
+                        <button type="button" class="term-signature-marker" data-term-marker aria-label="Posicao da assinatura">
+                            Assinatura
+                        </button>
+                    </div>
+                    <div class="term-coordinate-grid">
+                        <div>
+                            <label for="devolucao_signature_page">Pagina</label>
+                            <input id="devolucao_signature_page" name="signature_page" type="number" min="1" max="20" value="{{ term_return_signature_defaults.page }}">
+                        </div>
+                        <div>
+                            <label for="devolucao_signature_x">X</label>
+                            <input id="devolucao_signature_x" name="signature_x" type="number" min="0" max="595" value="{{ term_return_signature_defaults.x }}" data-term-x>
+                        </div>
+                        <div>
+                            <label for="devolucao_signature_y">Y</label>
+                            <input id="devolucao_signature_y" name="signature_y" type="number" min="0" max="842" value="{{ term_return_signature_defaults.y }}" data-term-y>
+                        </div>
+                    </div>
+                    <div class="term-preset-row">
+                        <button type="button" class="btn btn-outline btn-compact" data-term-preset="left">Esquerda</button>
+                        <button type="button" class="btn btn-outline btn-compact" data-term-preset="center">Centro</button>
+                        <button type="button" class="btn btn-outline btn-compact" data-term-preset="right">Direita</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="actions section-spacer">
+                <button class="btn btn-outline" type="submit" name="term_action" value="draft">Baixar DOCX de devolução</button>
+                <button class="btn btn-primary" type="submit" name="term_action" value="send" data-confirm="Enviar termo de devolução pelo DocuSign para este colaborador?">Enviar devolução</button>
+            </div>
+        </form>
+    </details>
+    {% endif %}
+
+    <div class="section-title section-spacer">Responsabilidades vinculadas</div>
+    <div class="table-wrap section-spacer collaborator-responsibility-table">
+        <table>
+            <thead>
+                <tr>
+                    <th>Item</th>
+                    <th>Identificacao</th>
+                    <th>NF / Pagante</th>
+                    <th>Quantidade</th>
+                    <th>Status / Observacao</th>
+                    <th>Acoes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for eq in colaborador_atual.equipamentos %}
+                <tr>
+                    <td data-label="Item">
+                        <strong>{{ eq.tipo_equipamento or '-' }}</strong>
+                        <span class="table-subline">{{ eq.nome_equipamento_rfm or eq.nome_acessorio_rfm or '-' }}</span>
+                    </td>
+                    <td data-label="Identificacao">
+                        <span class="asset-code">{{ eq.patrimonio or '-' }}</span>
+                        {% if eq.service_tag %}<br><span class="service-code">{{ eq.service_tag }}</span>{% endif %}
+                        {% if eq.numero_acessorio %}<br><span class="service-code">{{ eq.numero_acessorio }}</span>{% endif %}
+                    </td>
+                    <td data-label="NF / Pagante">
+                        {% if eq.invoice %}
+                        <a class="service-code" href="{{ url_for('detalhe_nota_fiscal', invoice_id=eq.invoice.id) }}">{{ eq.invoice.numero }}</a>
+                        {% else %}
+                        Sem NF
+                        {% endif %}
+                        <span class="table-subline">{{ eq.pagante or '-' }}</span>
+                        {% if eq.monitor_invoice or eq.monitor_pagante %}
+                        <span class="table-subline">
+                            Monitor:
+                            {% if eq.monitor_invoice %}
+                            <a class="service-code" href="{{ url_for('detalhe_nota_fiscal', invoice_id=eq.monitor_invoice.id) }}">{{ eq.monitor_invoice.numero }}</a>
+                            {% else %}
+                            Sem NF
+                            {% endif %}
+                            / {{ eq.monitor_pagante or '-' }}
+                        </span>
+                        {% endif %}
+                    </td>
+                    <td data-label="Quantidade">1</td>
+                    <td data-label="Status / Observacao">
+                        {{ eq.status_equipamento or '-' }}
+                    </td>
+                    <td data-label="Acoes">
+                        <div class="action-row">
+                            {% if not current_user.is_rh %}
+                            <a class="btn btn-secondary" href="{{ url_for('editar_equipamento', equipamento_id=eq.id) }}">Editar</a>
+                            {% endif %}
+                            {% if current_user.can_edit or current_user.is_admin %}
+                            <form class="inline-action-form" method="post" action="{{ url_for('remover_equipamento_colaborador', equipamento_id=eq.id) }}">
+                                {{ csrf_input()|safe }}
+                                <input type="hidden" name="colaborador" value="{{ colaborador_atual.nome }}">
+                                <button class="btn btn-danger" type="submit" data-confirm="Remover este equipamento do colaborador? Ele continuara no inventario como estoque.">Remover</button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+
+                {% for alocacao in alocacoes_colaborador %}
+                {% set item_nf = alocacao.invoice_item %}
+                {% set stock_eq = alocacao.stock_equipment %}
+                {% set invoice = item_nf.invoice if item_nf else (stock_eq.invoice if stock_eq else none) %}
+                {% set form_edicao_id = 'editar-alocacao-' ~ alocacao.id %}
+                <tr>
+                    <td data-label="Item">
+                        <strong>{% if item_nf %}NF sem tag{% elif stock_eq and stock_eq.invoice %}Lote com NF{% elif stock_eq %}Lote sem NF{% else %}Sem NF{% endif %}</strong>
+                        {% if current_user.can_edit or current_user.is_admin %}
+                            {% if item_nf %}
+                            <span class="table-subline">{{ item_nf.descricao }}</span>
+                            {% elif stock_eq %}
+                            <span class="table-subline">{{ stock_eq.nome_equipamento_rfm }}</span>
+                            {% else %}
+                            <input name="descricao_manual" type="text" value="{{ alocacao.descricao_manual or '' }}" form="{{ form_edicao_id }}" required>
+                            {% endif %}
+                        {% else %}
+                        <span class="table-subline">{{ item_nf.descricao if item_nf else (stock_eq.nome_equipamento_rfm if stock_eq else (alocacao.descricao_manual or '-')) }}</span>
+                        {% endif %}
+                    </td>
+                    <td data-label="Identificacao">
+                        {% if stock_eq %}
+                        <span class="asset-code">{{ stock_eq.patrimonio or '-' }}</span>
+                        {% else %}
+                        Sem patrimonio individual
+                        {% endif %}
+                    </td>
+                    <td data-label="NF / Pagante">
+                        {% if invoice %}
+                        <a class="service-code" href="{{ url_for('detalhe_nota_fiscal', invoice_id=invoice.id) }}">{{ invoice.numero }}</a>
+                        {% else %}
+                        Sem NF
+                        {% endif %}
+                        <span class="table-subline">{{ invoice.pagante if invoice and invoice.pagante else (stock_eq.pagante if stock_eq and stock_eq.pagante else '-') }}</span>
+                    </td>
+                    <td data-label="Quantidade">
+                        {% if current_user.can_edit or current_user.is_admin %}
+                        <input name="quantidade" type="number" min="1" value="{{ alocacao.quantidade }}" form="{{ form_edicao_id }}" required>
+                        {% else %}
+                        {{ alocacao.quantidade }}
+                        {% endif %}
+                    </td>
+                    <td data-label="Status / Observacao">
+                        {% if item_nf %}
+                        Saldo {{ item_nf.saldo_disponivel }}/{{ item_nf.quantidade }}
+                        {% elif stock_eq %}
+                        Saldo {{ stock_eq.saldo_disponivel }}/{{ stock_eq.quantidade_estoque }}
+                        {% else %}
+                        Sem controle
+                        {% endif %}
+                        {% if current_user.can_edit or current_user.is_admin %}
+                        <input name="observacoes" type="text" value="{{ alocacao.observacoes or '' }}" form="{{ form_edicao_id }}" placeholder="Observacao">
+                        {% elif alocacao.observacoes %}
+                        <span class="table-subline">{{ alocacao.observacoes }}</span>
+                        {% endif %}
+                    </td>
+                    <td data-label="Acoes">
+                        {% if current_user.can_edit or current_user.is_admin %}
+                        <div class="action-row">
+                            <form id="{{ form_edicao_id }}" class="inline-action-form" method="post" action="{{ url_for('editar_alocacao_colaborador', alocacao_id=alocacao.id) }}">
+                                {{ csrf_input()|safe }}
+                                <button class="btn btn-secondary" type="submit">Salvar</button>
+                            </form>
+                            <form class="inline-action-form" method="post" action="{{ url_for('excluir_alocacao_colaborador', alocacao_id=alocacao.id) }}">
+                                {{ csrf_input()|safe }}
+                                <button class="btn btn-danger" type="submit" data-confirm="{% if item_nf %}Remover este vinculo e liberar saldo da NF?{% elif stock_eq %}Remover este vinculo e devolver saldo ao estoque?{% else %}Remover este item sem NF?{% endif %}">Remover</button>
+                            </form>
+                        </div>
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+
+                {% if not colaborador_atual.equipamentos and not alocacoes_colaborador %}
+                <tr><td colspan="6">Nenhuma responsabilidade vinculada a este colaborador.</td></tr>
+                {% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% if current_user.can_edit or current_user.is_admin %}
+<div class="collaborator-action-stack section-spacer">
+    <div class="collaborator-action-stack-head">
+        <div class="section-title">Ações do colaborador</div>
+        <div class="section-note">Abra somente a ação que voce vai executar agora.</div>
+    </div>
+
+    <details class="panel collaborator-action-card" id="vincular-etiqueta">
+        <summary>Vincular equipamento com Patrimonio</summary>
+        <form class="equipment-form section-spacer" method="post" action="{{ url_for('vincular_equipamento_colaborador') }}" data-equipment-link-search-form>
+            {{ csrf_input()|safe }}
+            <input type="hidden" name="colaborador_nome" value="{{ colaborador_atual.nome }}">
+            <input type="hidden" name="colaborador_email" value="{{ colaborador_atual.email }}">
+            <input id="equipment_id_individual" name="equipment_id" type="hidden" data-equipment-id-input>
+            <div class="grid-3">
+                <div class="field-wide">
+                    <label for="codigo_equipamento">Patrimonio / Service Tag</label>
+                    <div class="equipment-link-search">
+                        <input
+                            id="codigo_equipamento"
+                            name="codigo_equipamento"
+                            type="text"
+                            placeholder="Digite o patrimonio, Service Tag ou modelo"
+                            autocomplete="off"
+                            data-equipment-search-input
+                            data-search-url="{{ url_for('buscar_equipamentos_para_vinculo') }}"
+                        >
+                        <div class="equipment-link-results" data-equipment-search-results hidden></div>
+                    </div>
+                </div>
+                <div class="full">
+                    <label for="observacoes_individual">Observacao</label>
+                    <textarea id="observacoes_individual" name="observacoes" rows="2"></textarea>
+                </div>
+            </div>
+            <div class="actions section-spacer">
+                <button class="btn btn-primary" type="submit">Vincular equipamento</button>
+                <a class="btn btn-outline" href="{{ url_for('novo_equipamento') }}">Cadastrar equipamento</a>
+            </div>
+        </form>
+    </details>
+
+    <details class="panel collaborator-action-card" id="vincular-lote">
+        <summary>Vincular lote por quantidade</summary>
+        {% if lotes_disponiveis %}
+        <form class="equipment-form section-spacer" method="post" action="{{ url_for('adicionar_alocacao_estoque_colaborador') }}">
+            {{ csrf_input()|safe }}
+            <input type="hidden" name="colaborador_nome" value="{{ colaborador_atual.nome }}">
+            <input type="hidden" name="colaborador_email" value="{{ colaborador_atual.email }}">
+            <div class="grid-3">
+                <div class="field-wide">
+                    <label for="equipment_id">Lote</label>
+                    <select id="equipment_id" name="equipment_id" required>
+                        <option value="">Selecione o lote</option>
+                        {% for lote in lotes_disponiveis %}
+                        <option value="{{ lote.id }}">
+                            {{ lote.tipo_equipamento }} - {{ lote.nome_equipamento_rfm }}
+                            | {{ 'NF ' ~ lote.invoice.numero if lote.invoice else 'Sem NF' }}
+                            | saldo {{ lote.saldo_disponivel }}/{{ lote.quantidade_estoque or 1 }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="quantidade_estoque_alocacao">Quantidade</label>
+                    <input id="quantidade_estoque_alocacao" name="quantidade" type="number" min="1" value="1" required>
+                </div>
+                <div class="full">
+                    <label for="observacoes_estoque">Observacao</label>
+                    <textarea id="observacoes_estoque" name="observacoes" rows="2"></textarea>
+                </div>
+            </div>
+            <div class="actions section-spacer">
+                <button class="btn btn-primary" type="submit">Vincular lote</button>
+                <a class="btn btn-outline" href="{{ url_for('novo_equipamento') }}">Cadastrar lote</a>
+            </div>
+        </form>
+        {% else %}
+        <div class="section-note section-spacer">Nenhum lote com saldo disponivel.</div>
+        <div class="actions section-spacer">
+            <a class="btn btn-primary" href="{{ url_for('novo_equipamento') }}">Cadastrar lote</a>
+        </div>
+        {% endif %}
+    </details>
+
+    <details class="panel collaborator-action-card" id="vincular-nf">
+        <summary>Vincular itens de NF</summary>
+        {% if itens_nf_disponiveis %}
+        <form class="equipment-form section-spacer" method="post" action="{{ url_for('adicionar_alocacao_colaborador') }}">
+            {{ csrf_input()|safe }}
+            <input type="hidden" name="colaborador_nome" value="{{ colaborador_atual.nome }}">
+            <input type="hidden" name="colaborador_email" value="{{ colaborador_atual.email }}">
+            <div class="section-note">Selecione ate duas NFs/itens para salvar no mesmo colaborador.</div>
+            <div class="grid-3 section-spacer">
+                {% for linha in [1, 2] %}
+                <div class="field-wide">
+                    <label for="invoice_item_id_{{ linha }}">NF / item {{ linha }}</label>
+                    <select id="invoice_item_id_{{ linha }}" name="invoice_item_id" {% if linha == 1 %}required{% endif %}>
+                        <option value="">{% if linha == 1 %}Selecione a NF/item{% else %}Opcional{% endif %}</option>
+                        {% for item in itens_nf_disponiveis %}
+                        <option value="{{ item.id }}">
+                            NF {{ item.invoice.numero if item.invoice else '-' }}
+                            | {{ item.descricao }}
+                            | saldo {{ item.saldo_disponivel }}/{{ item.quantidade }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="quantidade_nf_{{ linha }}">Quantidade {{ linha }}</label>
+                    <input id="quantidade_nf_{{ linha }}" name="quantidade" type="number" min="1" value="1" {% if linha == 1 %}required{% endif %}>
+                </div>
+                <div>
+                    <label for="observacoes_nf_{{ linha }}">Observacao {{ linha }}</label>
+                    <input id="observacoes_nf_{{ linha }}" name="observacoes" type="text">
+                </div>
+                {% endfor %}
+            </div>
+            <div class="actions section-spacer">
+                <button class="btn btn-primary" type="submit">Vincular NF(s)</button>
+                <a class="btn btn-outline" href="{{ url_for('notas_fiscais') }}">Ver notas fiscais</a>
+            </div>
+        </form>
+        {% else %}
+        <div class="section-note section-spacer">Nenhum item de NF com saldo disponivel.</div>
+        <div class="actions section-spacer">
+            <a class="btn btn-primary" href="{{ url_for('notas_fiscais') }}">Ver notas fiscais</a>
+        </div>
+        {% endif %}
+    </details>
+
+    <details class="panel collaborator-action-card" id="item-sem-nf">
+        <summary>Adicionar item sem NF</summary>
+        <form class="equipment-form section-spacer" method="post" action="{{ url_for('adicionar_alocacao_manual_colaborador') }}">
+            {{ csrf_input()|safe }}
+            <input type="hidden" name="colaborador_nome" value="{{ colaborador_atual.nome }}">
+            <input type="hidden" name="colaborador_email" value="{{ colaborador_atual.email }}">
+            <div class="grid-3">
+                <div class="field-wide">
+                    <label for="descricao_manual">Item</label>
+                    <input id="descricao_manual" name="descricao_manual" type="text" placeholder="Ex: Mouse Logitech M90" required>
+                </div>
+                <div>
+                    <label for="quantidade_manual">Quantidade</label>
+                    <input id="quantidade_manual" name="quantidade" type="number" min="1" value="1" required>
+                </div>
+                <div class="full">
+                    <label for="observacoes_manual">Observacao</label>
+                    <textarea id="observacoes_manual" name="observacoes" rows="2"></textarea>
+                </div>
+            </div>
+            <div class="actions section-spacer">
+                <button class="btn btn-primary" type="submit">Adicionar item</button>
+            </div>
+        </form>
+    </details>
+
+    <details class="panel collaborator-action-card" id="transferir-responsavel">
+        <summary>Transferir responsabilidade</summary>
+        <form class="equipment-form transfer-form section-spacer" method="post" action="{{ url_for('transferir_responsavel_colaborador') }}">
+            {{ csrf_input()|safe }}
+            <input type="hidden" name="origem_nome" value="{{ colaborador_atual.nome }}">
+            <input type="hidden" name="origem_chave" value="{{ colaborador_atual.chave }}">
+            <div class="grid-2">
+                <div class="full">
+                    <label for="destino_m365_id">Novo responsavel cadastrado</label>
+                    {% set sugestoes_ids = sugestoes_transferencia|map(attribute='id')|list %}
+                    <select id="destino_m365_id" name="destino_m365_id">
+                        <option value="">Selecione na base ou preencha manualmente</option>
+                        {% if sugestoes_transferencia %}
+                        <optgroup label="Possiveis compativeis">
+                            {% for opcao in sugestoes_transferencia %}
+                            <option value="{{ opcao.id }}">{{ opcao.nome }} | {{ opcao.email or '-' }}</option>
+                            {% endfor %}
+                        </optgroup>
+                        {% endif %}
+                        <optgroup label="Todos os colaboradores cadastrados">
+                            {% for opcao in opcoes_transferencia %}
+                            {% if opcao.id not in sugestoes_ids %}
+                            <option value="{{ opcao.id }}">{{ opcao.nome }} | {{ opcao.email or '-' }}</option>
+                            {% endif %}
+                            {% endfor %}
+                        </optgroup>
+                    </select>
+                </div>
+                <div>
+                    <label for="destino_nome_manual">Nome manual</label>
+                    <input id="destino_nome_manual" name="destino_nome_manual" type="text">
+                </div>
+                <div>
+                    <label for="destino_email_manual">E-mail manual</label>
+                    <input id="destino_email_manual" name="destino_email_manual" type="email">
+                </div>
+                <div class="transfer-checks full">
+                    <label><input type="checkbox" name="transferir_equipamentos" value="1" {% if colaborador_atual.equipamentos %}checked{% endif %}> Equipamentos do inventario</label>
+                    <label><input type="checkbox" name="transferir_alocacoes" value="1" {% if alocacoes_colaborador %}checked{% endif %}> Lotes e itens vinculados</label>
+                    <label><input type="checkbox" name="atualizar_dados_365" value="1" checked> Atualizar departamento e setor/função pelo 365</label>
+                </div>
+            </div>
+            <div class="actions section-spacer">
+                <button class="btn btn-primary" type="submit" data-confirm="Transferir responsabilidades deste colaborador para o novo responsavel?">Transferir responsavel</button>
+            </div>
+        </form>
+    </details>
+
+    {% if colaborador_atual.microsoft365 %}
+    <details class="panel collaborator-action-card" id="editar-colaborador">
+        <summary>Editar ou excluir colaborador</summary>
+        <form class="equipment-form transfer-form section-spacer" method="post" action="{{ url_for('editar_colaborador', colaborador_id=colaborador_atual.microsoft365.id) }}">
+            {{ csrf_input()|safe }}
+            <div class="grid-3">
+                <div>
+                    <label for="editar_display_name">Nome</label>
+                    <input id="editar_display_name" name="display_name" type="text" value="{{ colaborador_atual.microsoft365.display_name }}" required>
+                </div>
+                <div>
+                    <label for="editar_mail">E-mail</label>
+                    <input id="editar_mail" name="mail" type="email" value="{{ colaborador_atual.email }}">
+                </div>
+                <div>
+                    <label for="editar_email_pessoal">Email Pessoal</label>
+                    <input id="editar_email_pessoal" name="email_pessoal" type="email" value="{{ colaborador_atual.microsoft365.email_pessoal or '' }}">
+                </div>
+                <div>
+                    <label for="editar_cpf">CPF</label>
+                    <input id="editar_cpf" name="cpf" type="text" value="{{ formatar_cpf(colaborador_atual.microsoft365.cpf) if colaborador_atual.microsoft365.cpf else '' }}" inputmode="numeric" maxlength="14" data-cpf-mask>
+                </div>
+                <div>
+                    <label for="editar_empresa_colaborador">Empresa</label>
+                    <select id="editar_empresa_colaborador" name="empresa_colaborador">
+                        <option value="">Nao informado</option>
+                        {% for empresa in empresas_colaborador %}
+                        <option value="{{ empresa }}" {% if colaborador_atual.microsoft365.empresa_colaborador == empresa %}selected{% endif %}>{{ empresa }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div>
+                    <label for="editar_department">Departamento</label>
+                    <input id="editar_department" name="department" type="text" value="{{ colaborador_atual.microsoft365.department or '' }}">
+                </div>
+                <div>
+                    <label for="editar_job_title">Setor/Função</label>
+                    <input id="editar_job_title" name="job_title" type="text" value="{{ colaborador_atual.microsoft365.job_title or '' }}">
+                </div>
+                <div>
+                    <label for="editar_mobile_phone">Telefone</label>
+                    <input id="editar_mobile_phone" name="mobile_phone" type="text" value="{{ colaborador_atual.microsoft365.mobile_phone or '' }}">
+                </div>
+                <div class="full">
+                    <label class="toggle-card">
+                        <input type="checkbox" name="account_enabled" value="1" {% if colaborador_atual.microsoft365.account_enabled %}checked{% endif %}>
+                        <span class="toggle-switch" aria-hidden="true"></span>
+                        <span>
+                            <strong>Colaborador ativo</strong>
+                            <small>Disponivel para receber equipamentos e responsabilidades.</small>
+                        </span>
+                    </label>
+                </div>
+                <div class="full">
+                    <label class="toggle-card">
+                        <input type="checkbox" name="no_license_confirmed" value="1" {% if colaborador_atual.microsoft365.no_license_confirmed %}checked{% endif %}>
+                        <span class="toggle-switch" aria-hidden="true"></span>
+                        <span>
+                            <strong>Confirmado sem licenca Microsoft 365</strong>
+                            <small>Marque quando esta pessoa realmente nao usa licenca. Ela some da lista de usuarios sem licenca.</small>
+                        </span>
+                    </label>
+                </div>
+            </div>
+            <div class="actions section-spacer">
+                <button class="btn btn-primary" type="submit">Salvar colaborador</button>
+            </div>
+        </form>
+        <form class="inline-action-form section-spacer" method="post" action="{{ url_for('excluir_colaborador', colaborador_id=colaborador_atual.microsoft365.id) }}">
+            {{ csrf_input()|safe }}
+            <button class="btn btn-danger" type="submit" data-confirm="Excluir este colaborador? Equipamentos vinculados vao para estoque e lotes/itens terao saldo liberado. O historico dos notebooks sera preservado.">Excluir colaborador e devolver itens ao estoque</button>
+        </form>
+    </details>
+    {% else %}
+    <details class="panel collaborator-action-card" id="remover-colaborador-legado">
+        <summary>Remover colaborador legado</summary>
+        <div class="section-note section-spacer">
+            Este nome veio de vinculos antigos do inventario e nao possui cadastro na base de colaboradores. Ao remover, os equipamentos voltam para estoque e os lotes/itens vinculados liberam saldo.
+        </div>
+        <form class="inline-action-form section-spacer" method="post" action="{{ url_for('excluir_colaborador_legado') }}">
+            {{ csrf_input()|safe }}
+            <input type="hidden" name="colaborador_nome" value="{{ colaborador_atual.nome }}">
+            <button class="btn btn-danger" type="submit" data-confirm="Remover este colaborador legado? Equipamentos vinculados vao para estoque e lotes/itens terao saldo liberado. O historico dos notebooks sera preservado.">Remover legado e devolver itens ao estoque</button>
+        </form>
+    </details>
+    {% endif %}
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}

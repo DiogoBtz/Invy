@@ -1,0 +1,23 @@
+{# Barra superior discreta para contexto do usuario logado. #}
+<div class="workspace-bar{% if current_user and current_user.can_view and not current_user.is_rh %} has-global-search{% endif %}">
+    <div class="workspace-status">
+        <span class="workspace-dot" aria-hidden="true"></span>
+        <span>{% if current_user and current_user.is_rh %}Portal RH protegido{% else %}{{ brand.name|default('Invy') }} protegido{% endif %}</span>
+    </div>
+    {% if current_user and current_user.can_view and not current_user.is_rh %}
+    <form class="workspace-global-search" method="get" action="{{ url_for('historico_service_tag') }}">
+        <div class="workspace-search-field">
+            <svg class="workspace-search-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="11" cy="11" r="6"></circle>
+                <path d="m16 16 4 4"></path>
+            </svg>
+            <input class="workspace-global-input" type="text" name="busca" placeholder="Buscar patrimonio, Service Tag ou usuario" aria-label="Buscar equipamento">
+        </div>
+        <button class="workspace-global-button" type="submit">Buscar</button>
+    </form>
+    {% endif %}
+    <div class="workspace-user">
+        <span>{{ current_user.full_name if current_user else '-' }}</span>
+        <strong>{{ current_user.profile_label if current_user else '-' }}</strong>
+    </div>
+</div>

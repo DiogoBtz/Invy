@@ -1,0 +1,83 @@
+{# Chamados RH: fila leve para revisar cadastros sem carregar a pagina completa de colaboradores. #}
+{% extends "base.html" %}
+{% from "macros/rh.html" import rh_request_queue with context %}
+
+{% block content %}
+<div class="topbar">
+    <div>
+        <h1>Chamados RH</h1>
+        <div class="subtitle">Fila de novos colaboradores, separacao de notebook e termo DocuSign</div>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary" href="{{ url_for('colaboradores') }}">Abrir colaboradores</a>
+        {% if current_user.can_create_collaborator %}
+        <a class="btn btn-primary" href="{{ url_for('colaboradores') }}#novo-colaborador">Novo colaborador</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="stats rh-fast-stats">
+    <div class="stat-box accent-amber"><h3>{{ total_pendentes }}</h3><p>Em andamento</p></div>
+    <div class="stat-box accent-blue"><h3>{{ total_filtrado }}</h3><p>Resultado do filtro</p></div>
+    <div class="stat-box accent-green"><h3>{{ cadastros_rh_pendentes|length }}</h3><p>Exibidos agora</p></div>
+</div>
+
+<div class="panel rh-status-tabs-panel section-spacer">
+    <div class="rh-status-tabs">
+        {% for tab in rh_status_tabs %}
+        <a class="rh-status-tab {% if status_atual == tab.key %}active{% endif %}" href="{{ url_for('chamados_rh', status=tab.key, busca=busca, meus='1') if meus else url_for('chamados_rh', status=tab.key, busca=busca) }}">
+            <strong>{{ tab.count }}</strong>
+            <span>{{ tab.label }}</span>
+        </a>
+        {% endfor %}
+    </div>
+    {% if current_user.is_rh %}
+    <div class="rh-status-owner-filter">
+        <a class="btn {% if meus %}btn-primary{% else %}btn-outline{% endif %}" href="{{ url_for('chamados_rh', status=status_atual, busca=busca, meus='1') }}">Criados por mim</a>
+        {% if meus %}
+        <a class="btn btn-secondary" href="{{ url_for('chamados_rh', status=status_atual, busca=busca) }}">Ver todos</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+
+<div class="panel rh-fast-filter-panel section-spacer">
+    <div>
+        <div class="section-title">Filtrar chamados</div>
+        <div class="section-note">Busque por nome, e-mail, empresa, departamento ou setor/função sem carregar a lista completa de colaboradores.</div>
+    </div>
+    <form method="get" class="rh-fast-filter-form">
+        <div class="search-box">
+            <input type="text" name="busca" value="{{ busca }}" placeholder="Nome, e-mail, empresa ou departamento...">
+        </div>
+        <div class="actions">
+            <button class="btn btn-secondary" type="submit">Buscar</button>
+            {% if busca %}
+            <a class="btn btn-outline" href="{{ url_for('chamados_rh') }}">Limpar</a>
+            {% endif %}
+        </div>
+    </form>
+</div>
+
+{% if cadastros_rh_pendentes %}
+{{ rh_request_queue(
+    cadastros_rh_pendentes,
+    heading=rh_queue_heading,
+    note='Fila filtrada por ' ~ status_label_atual ~ '. TI atualiza notebook; RH envia termo e finaliza apos assinatura.',
+    panel_id='chamados-rh-ti',
+    compact=False,
+    total=total_filtrado,
+    return_status=status_atual
+) }}
+{% if total_filtrado > cadastros_rh_pendentes|length %}
+<div class="rh-limit-note">
+    Mostrando {{ cadastros_rh_pendentes|length }} de {{ total_filtrado }} resultado(s). Refine a busca para localizar um colaborador especifico.
+</div>
+{% endif %}
+{% else %}
+<div class="panel rh-request-empty section-spacer">
+    <strong>Nenhum chamado RH encontrado.</strong>
+    <span>{% if busca %}Tente limpar o filtro ou buscar por outro termo.{% else %}Quando o RH cadastrar um colaborador, ele aparece aqui para o TI separar o notebook.{% endif %}</span>
+</div>
+{% endif %}
+{% endblock %}

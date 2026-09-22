@@ -1,0 +1,159 @@
+﻿{# Importacao de planilha: primeiro pre-visualiza, depois confirma somente linhas validas. #}
+{% extends "base.html" %}
+{% block content %}
+
+<div class="topbar">
+    <div>
+        <h1>Importar planilha</h1>
+        <div class="subtitle">Valide CSV ou XLSX antes de gravar novos equipamentos no inventário</div>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-outline" href="{{ url_for('relatorios') }}">Voltar</a>
+    </div>
+</div>
+
+<div class="panel form-panel">
+    <form method="post" enctype="multipart/form-data">
+        {{ csrf_input()|safe }}
+        <input type="hidden" name="action" value="preview">
+        <div class="grid-2">
+            <div class="full">
+                <label>Arquivo CSV ou XLSX</label>
+                <input type="file" name="arquivo" accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required>
+                <div class="field-hint">A pré-visualização separa linhas prontas, pendências e duplicados. No XLSX, a primeira aba e a primeira linha de cabeçalho são usadas.</div>
+            </div>
+        </div>
+        <div class="actions">
+            <button class="btn btn-primary">Pré-visualizar planilha</button>
+        </div>
+    </form>
+</div>
+
+{# A pre-visualizacao separa linhas prontas, pendentes e duplicadas. #}
+{% if preview %}
+<div class="stats section-spacer">
+    <div class="stat-box"><h3>{{ preview.validos|length }}</h3><p>Prontos</p></div>
+    <div class="stat-box"><h3>{{ preview.pendentes|length }}</h3><p>Pendências</p></div>
+    <div class="stat-box"><h3>{{ preview.duplicados|length }}</h3><p>Duplicados</p></div>
+</div>
+
+{% if preview.validos %}
+<div class="panel section-spacer">
+    <div class="section-title">Linhas prontas para importar</div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Linha</th>
+                    <th>Data</th>
+                    <th>Tipo</th>
+                    <th>Patrimonio</th>
+                    <th>Patrimonio do acessorio</th>
+                    <th>Service Tag Dell</th>
+                    <th>Modelo</th>
+                    <th>Usuário</th>
+                    <th>Pagante</th>
+                    <th>Setor</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in preview.validos[:20] %}
+                <tr>
+                    <td data-label="Linha">{{ item.linha }}</td>
+                    <td data-label="Data">{{ item.dados.data_servico or '-' }}</td>
+                    <td data-label="Tipo">{{ item.dados.tipo_equipamento }}</td>
+                    <td data-label="Patrimonio"><span class="asset-code">{{ item.dados.patrimonio }}</span></td>
+                    <td data-label="Patrimonio do acessorio"><span class="asset-code">{{ item.dados.numero_acessorio or '-' }}</span></td>
+                    <td data-label="Service Tag Dell"><span class="service-code">{{ item.dados.service_tag or '-' }}</span></td>
+                    <td data-label="Modelo">{{ item.dados.nome_equipamento_rfm }}</td>
+                    <td data-label="Usuário">{{ item.dados.usuario_final or '-' }}</td>
+                    <td data-label="Pagante">{{ item.dados.pagante or '-' }}</td>
+                    <td data-label="Setor">{{ item.dados.setor_usuario or '-' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <form method="post" class="section-spacer">
+        {{ csrf_input()|safe }}
+        <input type="hidden" name="action" value="confirm">
+        <input type="hidden" name="preview_token" value="{{ preview_token }}">
+        <button class="btn btn-primary" data-confirm="Confirmar importacao das {{ preview.validos|length }} linha(s) prontas? Duplicados e pendencias nao serao gravados.">
+            Confirmar importação de {{ preview.validos|length }} linha(s)
+        </button>
+        <span class="section-note">Somente as linhas prontas entram no banco. Linhas duplicadas ou pendentes ficam fora para evitar repeticao.</span>
+    </form>
+</div>
+{% endif %}
+
+{% if preview.pendentes %}
+<div class="panel section-spacer">
+    <div class="section-title">Pendências para corrigir</div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Linha</th>
+                    <th>Motivo</th>
+                    <th>Tipo</th>
+                    <th>Patrimonio</th>
+                    <th>Patrimonio do acessorio</th>
+                    <th>Service Tag Dell</th>
+                    <th>Modelo</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in preview.pendentes[:30] %}
+                <tr>
+                    <td data-label="Linha">{{ item.linha }}</td>
+                    <td data-label="Motivo">{{ item.motivos|join(', ') }}</td>
+                    <td data-label="Tipo">{{ item.dados.tipo_equipamento }}</td>
+                    <td data-label="Patrimonio"><span class="asset-code">{{ item.dados.patrimonio or '-' }}</span></td>
+                    <td data-label="Patrimonio do acessorio"><span class="asset-code">{{ item.dados.numero_acessorio or '-' }}</span></td>
+                    <td data-label="Service Tag Dell"><span class="service-code">{{ item.dados.service_tag or '-' }}</span></td>
+                    <td data-label="Modelo">{{ item.dados.nome_equipamento_rfm }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% if preview.duplicados %}
+<div class="panel section-spacer">
+    <div class="section-title">Duplicados ignorados</div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Linha</th>
+                    <th>Motivo</th>
+                    <th>Tipo</th>
+                    <th>Patrimonio</th>
+                    <th>Patrimonio do acessorio</th>
+                    <th>Service Tag Dell</th>
+                    <th>Modelo</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in preview.duplicados[:30] %}
+                <tr>
+                    <td data-label="Linha">{{ item.linha }}</td>
+                    <td data-label="Motivo">{{ item.motivos|join(', ') }}</td>
+                    <td data-label="Tipo">{{ item.dados.tipo_equipamento }}</td>
+                    <td data-label="Patrimonio"><span class="asset-code">{{ item.dados.patrimonio or '-' }}</span></td>
+                    <td data-label="Patrimonio do acessorio"><span class="asset-code">{{ item.dados.numero_acessorio or '-' }}</span></td>
+                    <td data-label="Service Tag Dell"><span class="service-code">{{ item.dados.service_tag or '-' }}</span></td>
+                    <td data-label="Modelo">{{ item.dados.nome_equipamento_rfm }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+{% endif %}
+
+{% endblock %}

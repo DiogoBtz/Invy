@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ page_title or 'Licenca - Invy' }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="login-page login-v2-page license-gate-page">
+    <main class="license-gate-shell">
+        <section class="license-gate-panel">
+            <div class="license-gate-copy">
+                <span class="login-v2-kicker">Invy / Licenca</span>
+                <h1>Acesso interrompido</h1>
+                <p>{{ resultado.message or 'Esta instalacao nao conseguiu validar a licenca.' }}</p>
+            </div>
+
+            <div class="license-status-grid">
+                <div>
+                    <span>Status</span>
+                    <strong>{{ status_label(resultado.status) }}</strong>
+                </div>
+                <div>
+                    <span>Versao instalada</span>
+                    <strong>{{ invy_app_version() }}</strong>
+                </div>
+                <div>
+                    <span>Validade</span>
+                    <strong>
+                        {% if resultado.expires_at %}
+                            {{ resultado.expires_at.strftime('%d/%m/%Y') }}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </strong>
+                </div>
+                <div>
+                    <span>Ultima tentativa</span>
+                    <strong>
+                        {% if resultado.checked_at %}
+                            {{ formatar_horario_br(resultado.checked_at) }}
+                        {% else %}
+                            Agora
+                        {% endif %}
+                    </strong>
+                </div>
+            </div>
+
+            <div class="license-support-card">
+                <strong>Precisa liberar este computador?</strong>
+                <span>Fale com o suporte e informe o status exibido nesta tela.</span>
+                <div class="license-support-actions">
+                    {% if support.whatsapp_url %}
+                        <a class="btn btn-primary" href="{{ support.whatsapp_url }}" target="_blank" rel="noopener">Chamar no WhatsApp</a>
+                    {% endif %}
+                    {% if support.email %}
+                        <a class="btn btn-secondary" href="mailto:{{ support.email }}">Enviar e-mail</a>
+                    {% endif %}
+                </div>
+                <small>
+                    {% if support.phone %}WhatsApp: {{ support.phone }}{% endif %}
+                    {% if support.phone and support.email %} / {% endif %}
+                    {% if support.email %}{{ support.email }}{% endif %}
+                </small>
+            </div>
+
+            <div class="actions">
+                <a class="btn btn-primary" href="{{ url_for('licenca_bloqueada') }}">Tentar novamente</a>
+            </div>
+        </section>
+    </main>
+</body>
+</html>

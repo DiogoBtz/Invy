@@ -1,0 +1,40 @@
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+Invy/.env
+Invy/chaves/
+*Key-Private*
+*.key
+*.p12
+*.pfx
+
+# Local databases and generated state
+*.db
+*.sqlite
+*.sqlite3
+Invy/instance/
+Invy/Backups Banco/
+
+# Customer files and uploads
+Invy/Termos Assinados/
+Invy/static/uploads/
+Invy/static/history_uploads/
+Invy/static/invoice_uploads/
+
+# Local logo experiments not used by the packaged login
+Invy/static/images/invy-logo-horizontal.png
+Invy/static/images/invy-logo-login.png
+Invy/static/images/invy-logo-login-transparent.png
+
+# Logs and temporary files
+*.log
+*.tmp
+*.bak
+__pycache__/
+*.pyc
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/

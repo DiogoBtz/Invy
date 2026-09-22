@@ -1,0 +1,305 @@
+﻿{# Detalhe de uma nota fiscal e equipamentos vinculados. #}
+{% extends "base.html" %}
+
+{% block content %}
+<div class="topbar">
+    <div>
+        <h1>NF {{ invoice.numero }}</h1>
+        <div class="subtitle">Equipamentos vinculados a esta nota fiscal</div>
+    </div>
+    <div class="page-actions">
+        <a class="btn btn-secondary" href="{{ url_for('equipamentos', nota_fiscal=invoice.numero) }}">Ver no inventario</a>
+        {% if current_user.can_edit or current_user.is_admin %}
+        <a class="btn btn-secondary" href="{{ url_for('editar_nota_fiscal', invoice_id=invoice.id) }}">Editar NF</a>
+        {% endif %}
+        {% if invoice.file_path %}
+        <a class="btn btn-primary" href="/{{ invoice.file_path }}" target="_blank" rel="noopener">Abrir anexo</a>
+        {% endif %}
+        {% if current_user.can_delete or current_user.is_admin %}
+        <form class="inline-action-form" method="post" action="{{ url_for('excluir_nota_fiscal', invoice_id=invoice.id) }}">
+            {{ csrf_input()|safe }}
+            <button
+                type="submit"
+                class="btn btn-danger"
+                data-confirm="Excluir a NF {{ invoice.numero }}? Os equipamentos continuam no inventario, mas o vinculo da NF, itens sem tag, pendencias e responsabilidades destes itens serao removidos."
+            >
+                Excluir NF
+            </button>
+        </form>
+        {% endif %}
+    </div>
+</div>
+
+<div class="stats">
+    <div class="stat-box"><h3>{{ equipamentos|length }}</h3><p>Equipamento(s)</p></div>
+    <div class="stat-box"><h3>{{ invoice.numero }}</h3><p>Numero NF</p></div>
+    <div class="stat-box"><h3>{{ 'Sim' if invoice.file_path else 'Nao' }}</h3><p>Anexo</p></div>
+    <div class="stat-box accent-amber"><h3>{{ invoice.pending_tags|length }}</h3><p>Pendencias</p></div>
+    <div class="stat-box"><h3>{{ invoice.items|length }}</h3><p>Itens sem tag</p></div>
+</div>
+
+<div class="panel section-spacer invoice-detail-panel">
+    <div class="section-title">Nota fiscal</div>
+    <div class="result-grid">
+        <div><span>Numero</span><strong>{{ invoice.numero }}</strong></div>
+        <div><span>Pagante</span><strong>{{ invoice.pagante or '-' }}</strong></div>
+        <div><span>Fornecedor</span><strong>{{ invoice.fornecedor or '-' }}</strong></div>
+        <div><span>Data compra</span><strong>{{ invoice.data_compra.strftime('%d/%m/%Y') if invoice.data_compra else '-' }}</strong></div>
+        <div><span>Arquivo</span><strong>{{ invoice.file_original_name or '-' }}</strong></div>
+        <div><span>Vinculos</span><strong>{{ equipamentos|length }}</strong></div>
+    </div>
+    {% if invoice.observacoes %}
+    <p class="muted">{{ invoice.observacoes }}</p>
+    {% endif %}
+    {% if invoice.file_path %}
+    <div class="actions">
+        <a class="btn btn-secondary" href="/{{ invoice.file_path }}" target="_blank" rel="noopener">Abrir foto/PDF</a>
+        {% if current_user.can_edit or current_user.is_admin %}
+        <form class="inline-action-form" method="post" action="{{ url_for('deletar_foto_nota_fiscal', invoice_id=invoice.id) }}">
+            {{ csrf_input()|safe }}
+            <input type="hidden" name="next" value="{{ url_for('detalhe_nota_fiscal', invoice_id=invoice.id) }}">
+            <button type="submit" class="btn btn-danger" data-confirm="Remover o anexo desta NF?">Remover anexo</button>
+        </form>
+        {% endif %}
+    </div>
+    {% else %}
+    <div class="muted">Para anexar a foto/PDF, abra um equipamento vinculado, informe este numero no bloco Pagante e selecione o arquivo da NF.</div>
+    {% endif %}
+</div>
+
+{% if current_user.can_edit or current_user.is_admin %}
+<div class="panel section-spacer invoice-manage-panel">
+    <div class="section-title">Adicionar vinculos</div>
+    <form class="equipment-form" method="post" action="{{ url_for('adicionar_tags_nota_fiscal', invoice_id=invoice.id) }}">
+        {{ csrf_input()|safe }}
+        <div class="grid">
+            <div class="full">
+                <label for="service_tags">Service Tags</label>
+                <textarea id="service_tags" name="service_tags" rows="4" placeholder="Cole uma ou varias Service Tags"></textarea>
+                <div class="field-hint">Encontradas entram na NF; ausentes ficam como pendencia.</div>
+            </div>
+        </div>
+        <div class="actions">
+            <button class="btn btn-secondary" type="submit">Vincular tags</button>
+        </div>
+    </form>
+
+    <form class="equipment-form section-spacer" method="post" action="{{ url_for('adicionar_item_nota_fiscal', invoice_id=invoice.id) }}">
+        {{ csrf_input()|safe }}
+        <div class="grid-3">
+            <div class="field-wide">
+                <label for="item_descricao">Item sem Service Tag</label>
+                <input id="item_descricao" name="item_descricao" type="text" placeholder="Ex: Mouse Dell sem fio">
+            </div>
+            <div>
+                <label for="item_quantidade">Quantidade</label>
+                <input id="item_quantidade" name="item_quantidade" type="number" min="1" value="1">
+            </div>
+            <div class="full">
+                <label for="item_observacoes">Observacao</label>
+                <input id="item_observacoes" name="item_observacoes" type="text" placeholder="Opcional">
+            </div>
+        </div>
+        <div class="actions">
+            <button class="btn btn-secondary" type="submit">Adicionar item</button>
+        </div>
+    </form>
+</div>
+{% endif %}
+
+<div class="panel section-spacer">
+    <div class="section-title">Equipamentos vinculados</div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Patrimonio</th>
+                    <th>Service Tag</th>
+                    <th>Tipo</th>
+                    <th>Modelo</th>
+                    <th>Usuario</th>
+                    <th>Pagante</th>
+                    <th>Status</th>
+                    <th>Acoes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for eq in equipamentos %}
+                {% set vinculo_monitor = eq.monitor_invoice_id == invoice.id %}
+                <tr>
+                    <td data-label="Patrimonio"><span class="asset-code">{{ eq.patrimonio or '-' }}</span></td>
+                    <td data-label="Service Tag"><span class="service-code">{{ eq.service_tag or '-' }}</span></td>
+                    <td data-label="Tipo">{{ eq.tipo_equipamento or '-' }}</td>
+                    <td data-label="Modelo">
+                        {{ eq.nome_equipamento_rfm or '-' }}
+                        <span class="table-subline">{{ 'Monitor vinculado' if vinculo_monitor else 'Equipamento principal' }}</span>
+                    </td>
+                    <td data-label="Usuario">{{ eq.usuario_final or '-' }}</td>
+                    <td data-label="Pagante">{{ eq.monitor_pagante if vinculo_monitor and eq.monitor_pagante else (eq.pagante or '-') }}</td>
+                    <td data-label="Status"><span class="status-pill" data-status="{{ eq.status_equipamento|lower }}">{{ eq.status_equipamento }}</span></td>
+                    <td data-label="Acoes">
+                        <div class="action-row">
+                            <a class="btn btn-secondary" href="{{ url_for('editar_equipamento', equipamento_id=eq.id, next=url_for('detalhe_nota_fiscal', invoice_id=invoice.id)) }}">Editar</a>
+                            <a class="btn btn-secondary" href="{{ url_for('historico_service_tag', equipamento_id=eq.id) }}">Detalhes</a>
+                        </div>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="8">Nenhum equipamento vinculado.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="panel section-spacer">
+    <div class="section-title">Pendencias de Service Tag</div>
+    <div class="section-note">
+        A pendencia aparece quando a Service Tag foi lida na NF/PDF, mas ainda nao existe no inventario. Cadastre o equipamento com esta Service Tag para resolver.
+    </div>
+    {% if invoice.pending_tags %}
+    <div class="actions">
+        {% if current_user.can_edit or current_user.is_admin %}
+        <form class="inline-action-form" method="post" action="{{ url_for('reprocessar_pendencias_nota_fiscal', invoice_id=invoice.id) }}">
+            {{ csrf_input()|safe }}
+            <button class="btn btn-secondary" type="submit">Reprocessar pendencias</button>
+        </form>
+        {% endif %}
+    </div>
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Service Tag</th>
+                    <th>Motivo</th>
+                    <th>Como resolver</th>
+                    <th>Cadastrada em</th>
+                    <th>Acoes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for contexto in pendencias_contexto %}
+                {% set pendencia = contexto.pendencia %}
+                <tr>
+                    <td data-label="Service Tag"><span class="service-code">{{ pendencia.service_tag }}</span></td>
+                    <td data-label="Motivo">{{ contexto.motivo }}</td>
+                    <td data-label="Como resolver">
+                        {{ contexto.acao }}
+                        {% if contexto.equipamento %}
+                        <div class="table-subline">
+                            Inventario: {{ contexto.equipamento.patrimonio or '-' }} - {{ contexto.equipamento.nome_equipamento_rfm or '-' }}
+                        </div>
+                        {% endif %}
+                    </td>
+                    <td data-label="Cadastrada em">{{ formatar_horario_br(pendencia.created_at) }}</td>
+                    <td data-label="Acoes">
+                        <div class="action-row">
+                            {% if current_user.can_create or current_user.is_admin %}
+                            {% if contexto.equipamento %}
+                            <a class="btn btn-secondary" href="{{ url_for('editar_equipamento', equipamento_id=contexto.equipamento.id, next=url_for('detalhe_nota_fiscal', invoice_id=invoice.id)) }}">Abrir equipamento</a>
+                            {% else %}
+                            <form class="pending-resolve-form" method="get" action="{{ url_for('novo_equipamento') }}">
+                                <input type="hidden" name="tipo_equipamento" value="Notebook">
+                                <input type="hidden" name="service_tag" value="{{ pendencia.service_tag }}">
+                                <input type="hidden" name="nota_fiscal_numero" value="{{ invoice.numero }}">
+                                <input type="hidden" name="pagante" value="{{ invoice.pagante or '' }}">
+                                <input type="hidden" name="next" value="{{ url_for('detalhe_nota_fiscal', invoice_id=invoice.id) }}">
+                                <input type="text" name="usuario_final" placeholder="Colaborador opcional" aria-label="Colaborador opcional">
+                                <button class="btn btn-secondary" type="submit">Cadastrar e vincular</button>
+                            </form>
+                            {% endif %}
+                            {% endif %}
+                            {% if current_user.can_edit or current_user.is_admin %}
+                            <form class="inline-action-form" method="post" action="{{ url_for('excluir_pendencia_nota_fiscal', invoice_id=invoice.id, pending_id=pendencia.id) }}">
+                                {{ csrf_input()|safe }}
+                                <button class="btn btn-danger" type="submit" data-confirm="Remover esta pendencia apenas se ela for leitura errada ou nao precisar entrar no inventario?">Ignorar</button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="muted">Nenhuma pendencia nesta nota.</div>
+    {% endif %}
+</div>
+
+<div class="panel section-spacer">
+    <div class="section-title">Itens sem Service Tag</div>
+    {% if invoice.items %}
+    <div class="table-wrap">
+        <table>
+            <thead>
+                <tr>
+                    <th>Descricao</th>
+                    <th>Comprado</th>
+                    <th>Vinculado</th>
+                    <th>Disponivel</th>
+                    <th>Responsaveis</th>
+                    <th>Observacao</th>
+                    <th>Acoes</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in invoice.items %}
+                {% set form_edicao_id = 'editar-item-nf-' ~ item.id %}
+                <tr>
+                    <td data-label="Descricao">
+                        {% if current_user.can_edit or current_user.is_admin %}
+                        <input name="item_descricao" type="text" value="{{ item.descricao }}" form="{{ form_edicao_id }}" required>
+                        {% else %}
+                        {{ item.descricao }}
+                        {% endif %}
+                    </td>
+                    <td data-label="Comprado">
+                        {% if current_user.can_edit or current_user.is_admin %}
+                        <input name="item_quantidade" type="number" min="{{ item.quantidade_alocada or 1 }}" value="{{ item.quantidade }}" form="{{ form_edicao_id }}" required>
+                        {% else %}
+                        {{ item.quantidade }}
+                        {% endif %}
+                    </td>
+                    <td data-label="Vinculado">{{ item.quantidade_alocada }}</td>
+                    <td data-label="Disponivel">{{ item.saldo_disponivel }}</td>
+                    <td data-label="Responsaveis">
+                        {% if item.assignments %}
+                        {% for alocacao in item.assignments %}
+                        <a href="{{ url_for('colaboradores', colaborador=alocacao.colaborador_nome) }}">{{ alocacao.colaborador_nome }}</a> ({{ alocacao.quantidade }}){% if not loop.last %}, {% endif %}
+                        {% endfor %}
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                    <td data-label="Observacao">
+                        {% if current_user.can_edit or current_user.is_admin %}
+                        <input name="item_observacoes" type="text" value="{{ item.observacoes or '' }}" form="{{ form_edicao_id }}" placeholder="Observacao">
+                        {% else %}
+                        {{ item.observacoes or '-' }}
+                        {% endif %}
+                    </td>
+                    <td data-label="Acoes">
+                        {% if current_user.can_edit or current_user.is_admin %}
+                        <form id="{{ form_edicao_id }}" class="inline-action-form" method="post" action="{{ url_for('editar_item_nota_fiscal', invoice_id=invoice.id, item_id=item.id) }}">
+                            {{ csrf_input()|safe }}
+                            <button class="btn btn-secondary" type="submit">Salvar</button>
+                        </form>
+                        <form class="inline-action-form" method="post" action="{{ url_for('excluir_item_nota_fiscal', invoice_id=invoice.id, item_id=item.id) }}">
+                            {{ csrf_input()|safe }}
+                            <button class="btn btn-danger" type="submit" data-confirm="Remover este item?">Remover</button>
+                        </form>
+                        {% else %}
+                        -
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="muted">Nenhum item sem Service Tag cadastrado nesta nota.</div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,45 @@
+<div class="m365-collaborator-license-card section-spacer">
+    <div class="m365-collaborator-license-head">
+        <div>
+            <strong>Licenças Microsoft 365</strong>
+            <span>{{ colaborador_atual.m365_license_account.user_principal_name if colaborador_atual.m365_license_account else (colaborador_atual.email or '-') }}</span>
+            {% if colaborador_atual.m365_license_account %}
+            <small>Conta 365 vinculada no Invy</small>
+            {% else %}
+            <small>Sem conta 365 vinculada</small>
+            {% endif %}
+        </div>
+        <div>
+            <span>Licenças em uso</span>
+            <strong>{{ colaborador_atual.m365_license_count or 0 }}</strong>
+            <span>{{ colaborador_atual.m365_license_names or '-' }}</span>
+        </div>
+        <div>
+            <span>Soma mensal das Licenças</span>
+            <strong>{{ colaborador_atual.m365_license_total_label or '-' }}</strong>
+            <span>{{ colaborador_atual.m365_license_value_note or '-' }}</span>
+        </div>
+    </div>
+    {% if colaborador_atual.m365_licenses %}
+    <div class="m365-collaborator-license-list">
+        {% for license in colaborador_atual.m365_licenses %}
+        <div>
+            <strong>{{ license.product_display_name or license.display_name or license.sku_part_number or license.sku_id }}</strong>
+            <span>{{ license.sku_part_number or license.sku_id }}</span>
+            {% if license.monthly_unit_price_label and license.monthly_unit_price_label != '-' %}
+            <span>Valor da licenca: {{ license.monthly_unit_price_label }}/mes</span>
+            {% else %}
+            <span>Valor da licenca: nao cadastrado</span>
+            {% endif %}
+            <span>{{ license.admin_center_subscription_scope_label or '-' }}</span>
+            <small>{{ license.admin_center_subscription_options_label or '-' }}</small>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="section-note section-spacer">Nenhuma licenca Microsoft 365 sincronizada para este colaborador.</div>
+    {% endif %}
+    {% if colaborador_atual.microsoft365 and colaborador_atual.microsoft365.no_license_confirmed %}
+    <div class="section-note section-spacer">Sem licenca confirmado manualmente no Invy.</div>
+    {% endif %}
+</div>
