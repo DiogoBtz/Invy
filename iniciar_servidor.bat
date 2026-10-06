@@ -22,7 +22,9 @@ if not exist "Invy\.env" (
     exit /b 1
 )
 
-if not defined INVY_DESKTOP_HOST set "INVY_DESKTOP_HOST=10.1.15.152"
+rem Por padrao, aceita conexoes apenas deste computador.
+rem Para uso em rede, defina INVY_DESKTOP_HOST explicitamente antes de iniciar.
+if not defined INVY_DESKTOP_HOST set "INVY_DESKTOP_HOST=127.0.0.1"
 if not defined INVY_DESKTOP_PORT set "INVY_DESKTOP_PORT=8000"
 if not defined INVY_OPEN_BROWSER set "INVY_OPEN_BROWSER=true"
 
